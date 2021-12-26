@@ -54,11 +54,11 @@ impl Recipe {
         let mut out = vec![];
 
         for (index, input) in self.rule.steps.iter().flatten().enumerate() {
-            vars.insert(format!("{}", index+1), input.clone());
+            vars.insert(format!("{}", index + 1), input.clone());
             all.push(input.clone());
         }
         for (index, output) in self.rule.outputs.iter().enumerate() {
-            vars.insert(format!("{}'", index+1), output.clone());
+            vars.insert(format!("{}'", index + 1), output.clone());
             out.push(output.clone());
         }
 

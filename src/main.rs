@@ -12,9 +12,9 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+use crate::color::Color;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
- use crate::color::Color;
 
 use lalrpop_util::lalrpop_mod;
 //use lalrpop_util::ParseError;
