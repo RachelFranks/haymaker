@@ -1,0 +1,52 @@
+
+use crate::parsed::{MakeLine, Rule, Import};
+use std::path::PathBuf;
+
+grammar();
+
+match {
+    r"\s*" => { },                                                                 // Skip whitespace
+    r"/\*(([^*/]|\n)|(\*+([^*/]|\n)|/([^*/]|\n)*|/\*([^*/]|\n)*))*\**\*/" => { },  // Skip multi-line comments
+    r"(//|#)[^\n\r]*[\n\r]*" => { },                                               // Skip single-line comments
+    _
+}
+
+Delimit<T, U>: Vec<T> = {
+    <mut vec:(<T> <U>)*> <last: T?> => {
+        let mut vec: Vec<_> = vec.into_iter().map(|x| x.0).collect();
+        vec.extend(last.into_iter());
+        vec
+    }
+};
+
+pub Def: Option<MakeLine> = {
+    Rule => Some(<>),
+    Import => Some(<>),
+    => None,
+};
+
+Import: MakeLine = {
+    "import" <files: Path+> => {
+        let import = Import { files };
+        MakeLine::Import(import)
+    },
+};
+
+Rule: MakeLine = {
+    <outputs: Ident+> ":" <steps: Delimit<Deps, "|">> => {
+        let rule = Rule { outputs, steps };
+        MakeLine::Rule(rule)
+    },
+};
+
+Deps: Vec<String> = {
+    <Ident+> => <>,
+};
+
+Path: PathBuf = {
+    Ident => PathBuf::from(<>),
+}
+
+Ident: String = {
+    r"[a-zA-Z_0-9\./]+" => String::from(<>),
+};
