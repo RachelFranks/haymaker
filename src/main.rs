@@ -73,7 +73,7 @@ fn main() {
         if line.contains("=") {
             // variable assignments
 
-            let mut sides: Vec<_> = line.split("=").collect();
+            let mut sides: Vec<_> = line.split('=').collect();
             sides.reverse();
 
             for (value, dest) in sides.into_iter().tuple_windows() {
