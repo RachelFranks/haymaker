@@ -3,6 +3,7 @@ use itertools::Itertools;
 use regex::Captures;
 use regex::Regex;
 use std::collections::{BTreeMap, HashSet};
+use std::process::Command;
 
 pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
     //
@@ -64,7 +65,7 @@ pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
                         false => text[inner..offset].to_owned(),
                     };
 
-                    let replacement = subcall(derive(found, vars), false);
+                    let replacement = subcall(derive(found, vars), true);
 
                     *text = match offset + 1 < text.len() {
                         true => text[..at_sign].to_owned() + &replacement + &text[(offset + 1)..],
@@ -91,9 +92,9 @@ pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
         steps.push(text.clone());
     }
 
-    println!("Derive {}", before);
+    println!("{} {}", "produce".blue(), before.trim());
     for step in steps {
-        println!("  {}", step.grey());
+        println!("        {}", step.grey());
     }
 
     text
@@ -108,7 +109,7 @@ fn subcall(mut text: String, debug: bool) -> String {
     let mut state = parts.next().unwrap().trim().to_owned();
 
     if debug {
-        println!("{} {}", "subcall".blue(), &text.trim());
+        println!("{} {}", "\nsubcall".blue(), &text.trim());
         println!("  {} {}", "input".grey(), &state);
     }
 
@@ -247,6 +248,25 @@ fn subcall(mut text: String, debug: bool) -> String {
                 }
                 state = outputs.join(" ");
             }
+            "shell" => {
+                let command = Command::new("sh").arg("-c").arg(inputs.join(" ")).output();
+
+                let output = match command {
+                    Ok(output) => output,
+                    Err(err) => {
+                        panic!("{}", err);
+                    }
+                };
+
+                if !output.status.success() {
+                    let error = String::from_utf8_lossy(&output.stderr);
+                    println!("  {} {}: {}", "error".grey(), "shell failure".red(), error);
+                    println!();
+                    return String::from("");
+                }
+
+                state = String::from_utf8_lossy(&output.stdout).to_string();
+            }
             "split" => {
                 /*let arg = match args.get(0) {
                     Some(arg) => arg,
@@ -286,8 +306,6 @@ fn subcall(mut text: String, debug: bool) -> String {
         if debug {
             println!("    {} {}", "out".grey(), &state);
         }
-
-        //println!("produce: {}", &state);
     }
 
     if debug {
@@ -318,13 +336,16 @@ fn test_subcalls() {
         ("a bb ccc | concat | debug_dash | add xx yyy z | debug_nothing", "------ xx yyy z"),
         ("a bb ccc \" \" | debug_nothing a b \"< >\"", "a bb ccc \" \""),
         ("a bb ccc \" \" | debug_dash", "- -- --- ---"),
+        ("a bb ccc ' ' | debug_dash", "- -- --- -"),
 
+        ("echo -n hello | shell", "hello"),
+        ("fail -n hello | shell", "hello"),
 
+        // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),
         (r#" '' ' ' '""' 'a"b"c' a"b" '" "b' | quote | debug_nothing"#, ""),        
         (r#"a a"b"c a"b"c"d " "b e | quote"#, r#"a"b"c"#),
         (r#"a a"b"c"d " "b e | debug_nothing"#, r#"a"b"c"#),*/
-        
     ];
 
     for (case, correct) in cases {
