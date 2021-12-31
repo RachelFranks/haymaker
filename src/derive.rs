@@ -5,7 +5,8 @@ use itertools::Itertools;
 use regex::Captures;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::io::Write;
 
 pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
     pub fn left_derive(text: &mut String, vars: &mut BTreeMap<String, String>) -> bool {
@@ -121,6 +122,7 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
     //let args_regex = Regex::new(r#"'[^']*'|\S+"#).unwrap();
 
+    //let mut parts = text.split('|').into_iter();
     let mut parts = text.split('|').into_iter();
     let mut state = parts.next().unwrap().trim().to_owned();
 
@@ -131,11 +133,22 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
     }
 
     macro_rules! error {
-        ($message:expr) => {{
+        ($format:expr $(,$args:expr)* $(,)?) => {{
+            let message = format!($format, $($args,)*);
             if debug {
-                println!("  {} {}", "error".grey(), $message.red());
+                println!("  {} {}", "error".grey(), message.red());
             }
             return (String::new(), HashMap::new());
+        }};
+    }
+
+    macro_rules! number {
+        ($expr:expr, $onerr:expr) => {{
+            let value: usize = match $expr.parse() {
+                Ok(value) => value,
+                Err(_) => error!("{}: {} is not a number", $onerr, $expr),
+            };
+            value
         }};
     }
 
@@ -222,11 +235,11 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
         }
 
         match command {
+            "count" => {
+                state = inputs.len().to_string();
+            }
             "concat" => {
                 state = inputs.iter().join("");
-            }
-            "count" | "gnu_words" => {
-                state = inputs.len().to_string();
             }
             "debug_nothing" => {
                 state = inputs.iter().join(" ");
@@ -243,27 +256,40 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
             "quote" => {
                 state = inputs.iter().map(|s| format!("'{}'", s)).join(" ");
             }
-
+            "add" => {
+                inputs.extend(args);
+                state = inputs.iter().join(" ");
+            }
+            "sort" => {
+                inputs.sort();
+                state = inputs.iter().join(" ");
+            }
             "first" => match inputs.get(0) {
                 Some(first) => state = first.to_string(),
                 None => error!("no first input"),
-            },
-            "gnu_firstword" => match inputs.get(0) {
-                Some(first) => state = first.to_string(),
-                None => state = String::new(),
             },
             "last" => match inputs.last() {
                 Some(first) => state = first.to_string(),
                 None => error!("no last input"),
             },
-            "gnu_lastword" => match inputs.last() {
-                Some(first) => state = first.to_string(),
-                None => state = String::new(),
-            },
-
-            "add" => {
-                inputs.extend(args);
-                state = inputs.iter().join(" ");
+            "def" => {
+                for arg in &args {
+                    defs.insert(arg.to_string(), state.to_owned());
+                }
+            }
+            "drop" => {
+                let count = match args.get(0) {
+                    Some(arg) => number!(arg, "drop"),
+                    None => 1,
+                };
+                state = inputs.iter().skip(count).join(" ");
+            }
+            "pop" => {
+                let count = match args.get(0) {
+                    Some(arg) => number!(arg, "pop"),
+                    None => 1,
+                };
+                state = inputs.iter().take(inputs.len().saturating_sub(count)).join(" ");
             }
             "append" => {
                 let mut outputs = vec![];
@@ -274,32 +300,6 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
                 }
                 state = outputs.join(" ");
             }
-
-            "def" => {
-                for arg in &args {
-                    defs.insert(arg.to_string(), state.to_owned());
-                }
-            }
-
-            "filter" => {}
-            "gnu_filter" => {}
-            "gnu_filter-out" => {}
-            "gnu_findstring" => {}
-
-            "gnu_lastword" => {}
-            "gnu_sort" => {}
-            "gnu_strip" => {}
-            "gnu_subst" => {}
-            "gnu_patsubst" => {}
-            "gnu_wordlist" => {}
-
-            "index" => {}
-            "gnu_word" => {}
-
-            "pop" => {
-                inputs.pop();
-                state = inputs.iter().join(" ");
-            }
             "prepend" => {
                 let mut outputs = vec![];
                 for input in inputs {
@@ -309,27 +309,93 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
                 }
                 state = outputs.join(" ");
             }
-            "shell" => {
-                let command = Command::new("sh").arg("-c").arg(inputs.join(" ")).output();
-
-                let output = match command {
-                    Ok(output) => output,
-                    Err(err) => {
-                        panic!("{}", err);
-                    }
+            "between" => {
+                let first = match args.get(0) {
+                    Some(arg) => number!(arg, "between").saturating_sub(1),
+                    None => 0,
                 };
+                let second = match args.get(1) {
+                    Some(arg) => number!(arg, "between"),
+                    None => inputs.len(),
+                };
+                state = inputs.iter().skip(first).take(second.saturating_sub(first)).join(" ");
+            }
+            "has" => {
+                let mut found = false;
+                'outer: for input in inputs {
+                    for arg in &args {
+                        if &input == arg {
+                            // will change to a regex, hence the double loop
+                            found = true;
+                            break 'outer;
+                        }
+                    }
+                }
+                if !found {
+                    state = String::new();
+                }
+            }
+            "index" => {
+                let mut outputs = vec![];
+                for mut arg in args {
+                    let mut flip = false;
+
+                    if arg.chars().next() == Some('-') {
+                        arg = &arg[1..];
+                        flip = true;
+                    }
+
+                    let offset = number!(arg, "index");
+
+                    let index = match flip {
+                        true => match inputs.len() >= offset {
+                            true => inputs.len() - offset,
+                            false => continue,
+                        },
+                        false => offset.saturating_sub(1),
+                    };
+
+                    if let Some(input) = inputs.get(index) {
+                        outputs.push(input);
+                    }
+                }
+                state = outputs.into_iter().join(" ");
+            }
+
+            "filter" => {}
+            "sift" => {}
+
+            "replace" => {}
+
+            "shell" => {
+                let mut child = Command::new("sh")
+                    .arg("-c")
+                    .arg(args.iter().join(" "))
+                    .stdin(Stdio::piped())
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .spawn()
+                    .unwrap();
+
+                child
+                    .stdin
+                    .as_mut()
+                    .unwrap()
+                    .write_all(inputs.into_iter().join(" ").as_bytes())
+                    .unwrap();
+
+                let output = child.wait_with_output().unwrap();
 
                 if !output.status.success() {
                     let error = String::from_utf8_lossy(&output.stderr);
                     println!("  {} {}: {}", "error".grey(), "shell failure".red(), error);
-                    println!();
                     return (String::new(), HashMap::new());
                 }
 
                 state = String::from_utf8_lossy(&output.stdout).to_string();
             }
             "split" => {
-                let mut outputs: Vec<_> = inputs; //.into_iter().map(String::from).collect();
+                let mut outputs: Vec<_> = inputs;
                 for arg in &args {
                     outputs = outputs
                         .into_iter()
@@ -353,10 +419,15 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
                 }
                 state = outputs.join(" ");
             }
+            "stop" => {
+                println!("    {} {}", "out".grey(), &state);
+                return (state, defs);
+            }
+            "error" => error!("called error"),
+            "suppress_errors" => {}
             unknown => {
                 if debug {
                     println!("  {} {} is not a valid command", "error".grey(), unknown.red());
-                    println!();
                     return (String::from(""), HashMap::new());
                 }
             }
@@ -411,23 +482,26 @@ fn test_subcalls() {
 
         ("please remove my e's | append ~ | split e | concat | split ~", "plas rmov my 's"),
         ("a b c d | pop | pop", "a b"),
+        ("a b c d | pop | drop", "b c"),
+        ("a b c d | pop 2 | drop", "b"),
+        ("a b c d | drop 2 | pop", "c"),
 
         ("one two three four 5 6 seven | count", "7"),
-        ("one two three four 5 6 seven | gnu_words", "7"),
-
-        /*("one two three four 5 6 seven |    index 4         ", "four"),
-        ("one two three four 5 6 seven | gnu_word 4         ", "four"),
-        ("one two three four 5 6 seven |    index 8 | add xx", ""),
-        ("one two three four 5 6 seven | gnu_word 8 | add xx", "xx"),*/
-
+        ("one two three four 5 6 seven | between 3 5", "three four 5"),
+        ("one two three four 5 6 seven | between 6", "6 seven"),
+        ("one two three four 5 6 seven | index 4 1 5", "four one 5"),
+        ("one two three four 5 6 seven | index 8 -2 3 -1 -8 -7 0", "6 three seven one one"),
         ("one two three four 5 6 seven | first", "one"),
-        ("one two three four 5 6 seven | gnu_firstword", "one"),
         ("one two three four 5 6 seven | last", "seven"),
-        ("one two three four 5 6 seven | gnu_lastword", "seven"),
-        (" | first         | add xx", ""),
-        (" | gnu_firstword | add xx", "xx"),
-        (" | last          | add xx", ""),
-        (" | gnu_lastword  | add xx", "xx"),
+        ("one two three four 5 6 seven | index 8 lol | add xx", ""),
+        (" | first | add xx", ""),
+        (" | last  | add xx", ""),
+
+        ("0 3 9 10 33 | sort", "0 10 3 33 9"),
+        ("0 3 9 10 33 | has yy 10", "0 3 9 10 33"),
+
+        ("this | stop  | add xx", "this"),
+        ("this | error | add xx", ""),
         
         // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),

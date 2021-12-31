@@ -166,6 +166,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
+name = "haymaker"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "lalrpop",
+ "lalrpop-util",
+ "petgraph 0.6.0",
+ "regex",
+ "structopt",
+]
+
+[[package]]
 name = "heck"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -284,18 +296,6 @@ name = "new_debug_unreachable"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4a24736216ec316047a1fc4252e27dabb04218aa4a3f37c6e7ddbf1f9782b54"
-
-[[package]]
-name = "paramake"
-version = "0.1.0"
-dependencies = [
- "itertools",
- "lalrpop",
- "lalrpop-util",
- "petgraph 0.6.0",
- "regex",
- "structopt",
-]
 
 [[package]]
 name = "parking_lot"

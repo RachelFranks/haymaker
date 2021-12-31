@@ -1,0 +1,30 @@
+
+use regex::Regex;
+
+grammar();
+
+match {
+    //r"\s*" => { },                   // Skip whitespace
+    r"(//|#)[^\n\r]*[\n\r]*" => { }, // Skip single-line comments
+    _
+}
+
+Delimit<T, U>: Vec<T> = {
+    <vec:(<T> <U>)*> <last: T?> => {
+        let mut vec: Vec<_> = vec.into_iter().map(|x| x.0).collect();
+        vec.extend(last.into_iter());
+        vec
+    }
+};
+
+pub Source: String = {
+    Delimit<> => <>.join(""),
+};
+
+Comment: String = {
+    "/*" <s: Source> "*/" => s.replace(|c| c != '\n', ' '),
+};
+
+Ident: String = {
+    r"[^*]+" => String::from(<>),
+};

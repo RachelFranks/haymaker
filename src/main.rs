@@ -25,6 +25,7 @@ mod color;
 mod derive;
 mod parsed;
 mod recipe;
+mod text;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "paramake", about = "A fearlessly parallel build system")]
