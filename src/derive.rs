@@ -122,8 +122,24 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
     //let args_regex = Regex::new(r#"'[^']*'|\S+"#).unwrap();
 
-    //let mut parts = text.split('|').into_iter();
     let mut parts = text.split('|').into_iter();
+
+    
+    let mut parts = vec![];
+    let mut start = 0;
+    let mut quoted = false;
+    for (offset, c) in text.char_indices() {
+        if c == '\'' {
+            quoted = !quoted;
+        }
+        if !quoted && c == '|' {
+            parts.push(&text[start..offset]);
+            start = offset + 1;
+        }
+    }
+    parts.push(&text[start..]);
+
+    let mut parts = parts.into_iter();
     let mut state = parts.next().unwrap().trim().to_owned();
 
     if debug {
@@ -471,16 +487,13 @@ fn test_subcalls() {
         ("a bb ccc \" \" | debug_dash", "- -- --- ---"),
         ("a bb ccc ' ' | debug_dash", "- -- --- -"),
 
-        ("echo -n hello | shell", "hello"),
-        ("fail -n hello | shell", ""),
-
         ("wow,this,is,cool | split ,", "wow this is cool"),
         ("wow,this,is,cool | split , o", "w w this is c l"),
         ("wow,this,is,cool | split is t s", "wow, h , ,cool"),
 
         ("a definition | def key1 key2", "a definition"),
 
-        ("please remove my e's | append ~ | split e | concat | split ~", "plas rmov my 's"),
+        ("please remove my es | append ~ | split e | concat | split ~", "plas rmov my s"),
         ("a b c d | pop | pop", "a b"),
         ("a b c d | pop | drop", "b c"),
         ("a b c d | pop 2 | drop", "b"),
@@ -502,6 +515,12 @@ fn test_subcalls() {
 
         ("this | stop  | add xx", "this"),
         ("this | error | add xx", ""),
+
+        (" | shell echo -n hello", "hello"),
+        (" | shell fail -n hello", ""),
+        ("humanity <3 | shell wc -c", "11"),
+        
+        ("a a bb bb a c | shell cat '|' wc -c", "13"),
         
         // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),
