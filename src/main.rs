@@ -95,12 +95,12 @@ fn main() {
         };
 
         if let MakeLine::Rule(rule) = parsed {
-            let mut recipe = Recipe::from(rule);
+            let recipe = Recipe::from(rule);
             recipes.push(recipe);
             continue;
         }
 
-        if let MakeLine::Import(import) = parsed {
+        if let MakeLine::Import(_import) = parsed {
             continue;
         }
     }
@@ -114,7 +114,7 @@ fn main() {
     //let mut nodes: BTreeMap::new();
 
     for recipe in recipes {
-        let node = graph.add_node(recipe);
+        let _node = graph.add_node(recipe);
     }
 
     while graph.node_count() > 0 {

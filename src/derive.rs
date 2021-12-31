@@ -56,8 +56,6 @@ pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
                 }
 
                 if let Some((at_sign, first_char)) = start {
-                    start = None;
-
                     let inner = at_sign + 2;
 
                     let found = match first_char.is_alphanumeric() {
@@ -92,7 +90,15 @@ pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
         steps.push(text.clone());
     }
 
-    println!("{} {}", "produce".blue(), before.trim());
+    let var_regex = Regex::new(r"(@[^()]+)").unwrap();
+    let pretty = before.trim().replace("|", &"|".blue());
+    let pretty = var_regex.replace_all(&pretty, "$1".pink());
+
+    let var_regex = Regex::new(r"@\(([a-zA-Z0-9_]+)").unwrap();
+    let pretty = var_regex.replace_all(&pretty, format!("@({}", "$1".pink()));
+
+    println!("{} {}", "process".pink(), pretty);
+    //println!("{} {}", "process".pink(), before.trim().replace("@", &"@".blue()).replace("|", &"|".blue()));
     for step in steps {
         println!("        {}", step.grey());
     }
@@ -100,7 +106,7 @@ pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
     text
 }
 
-fn subcall(mut text: String, debug: bool) -> String {
+fn subcall(text: String, debug: bool) -> String {
     let part_regex = Regex::new(r"(\S+)\s*(\S.*)?").unwrap();
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
     //let args_regex = Regex::new(r#"'[^']*'|\S+"#).unwrap();
@@ -109,11 +115,18 @@ fn subcall(mut text: String, debug: bool) -> String {
     let mut state = parts.next().unwrap().trim().to_owned();
 
     if debug {
-        println!("{} {}", "\nsubcall".blue(), &text.trim());
+        let full = text.trim().replace("|", &"|".blue());
+        println!(
+            "{} {}{}{}",
+            "\nsubcall".blue(),
+            "@(".blue(),
+            full,
+            ")".blue()
+        );
         println!("  {} {}", "input".grey(), &state);
     }
 
-    for mut part in parts {
+    for part in parts {
         let mut inputs = vec![];
         let mut quoted_inputs = HashSet::new();
         let mut quoted_args = HashSet::new();

@@ -1,0 +1,21 @@
+
+import src/Makefile
+
+files = rule here
+multi = @first second = @third = 32
+
+aaaa:
+bbbb:
+	echo hi
+	echo @multi
+
+cccc: bbbb
+	echo @1
+
+dddd: aaaa bbbb cccc
+	echo @2 @1
+
+eeee: aaaa | bbbb cccc | dddd
+	echo @all
+	echo @out
+	echo @2

@@ -68,7 +68,7 @@ impl Recipe {
         for line in &self.source {
             let line = derive(line.clone(), &vars);
 
-            println!("{}", line.grey());
+            println!("bash: {}", line.grey());
             let command = Command::new("sh").arg("-c").arg(line).output();
 
             let output = match command {

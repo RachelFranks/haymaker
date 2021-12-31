@@ -1,0 +1,23 @@
+
+
+short = is
+hide = @(short)
+
+hehe = Lee is cute
+derive = @1 is @1 + "@hehe" is true
+
+command = concat
+
+eeee: aaaa | bbbb cccc | dddd
+
+	echo @(derive | exclude @(1) @(out) | exclude @hide | @command)
+
+#	echo @(derive | exclude @1)
+
+#	echo @(hehe | def 1) @1
+
+#	echo @(@out) @out @(@out)
+#	echo @(derive | exclude @(1) @hide)# @(all) @(@(@out)) @(out) @hide
+#	echo @(derive | replace %.c %o) 
+#	echo @(derive | filter ^[a-z]+$ | repeat 16)
+#	echo @(derive | bash grep is)

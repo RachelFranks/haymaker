@@ -12,7 +12,7 @@ match {
 }
 
 Delimit<T, U>: Vec<T> = {
-    <mut vec:(<T> <U>)*> <last: T?> => {
+    <vec:(<T> <U>)*> <last: T?> => {
         let mut vec: Vec<_> = vec.into_iter().map(|x| x.0).collect();
         vec.extend(last.into_iter());
         vec

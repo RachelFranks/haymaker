@@ -1,0 +1,30 @@
+
+# Simple commands
+# @all        -- all inputs
+# @out        -- all outputs
+# @1          -- the 1st input
+# @1'         -- the 1st output
+# @updated    -- all inputs that were updated
+
+# Variables
+# @value = <some bash command>
+
+# Command arithmetic
+# @(all - 1)       -- all inputs except the 1st
+# @(all - updated) -- all inputs that were not updated
+# @(all - value)   -- set subtraction between @all and @value
+# @(all)           -- all inputs, de-duplicated
+
+message: a.txt
+	cat @all
+
+a.txt: b.txt
+	cat @1 > b.txt
+	echo "you!" >> @out
+
+b.txt: c.txt c.txt
+	echo @1 > b.txt
+	echo "love " >> @out
+
+c.txt:
+	echo "I " > c.txt
