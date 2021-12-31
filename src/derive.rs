@@ -274,6 +274,10 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
             "include" => {
                 state = inputs.iter().filter(|s| args.contains(&s)).join(" ");
             }
+            "pop" => {
+                inputs.pop();
+                state = inputs.iter().join(" ");
+            }
             "prepend" => {
                 let mut outputs = vec![];
                 for input in inputs {
@@ -384,6 +388,9 @@ fn test_subcalls() {
         ("wow,this,is,cool | split is t s", "wow, h , ,cool"),
 
         ("a definition | def key1 key2", "a definition"),
+
+        ("please remove my e's | append ~ | split e | concat | split ~", "plas rmov my 's"),
+        ("a b c d | pop", "a b c"),
 
         // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),
