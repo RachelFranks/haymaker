@@ -14,12 +14,21 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
 
         let mut stack: usize = 0;
         let mut start = None;
+        let mut quoted = false;
 
         text.push(' ');
         text.push(' ');
 
         for ((offset, curr), (_, next), (_, then)) in text.clone().char_indices().tuple_windows() {
             //
+
+            if curr == '\'' {
+                quoted = !quoted;
+            }
+
+            if quoted {
+                continue;
+            }
 
             if (curr, next) == ('@', '(') {
                 if stack == 0 {
@@ -30,7 +39,11 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
             }
 
             if curr == '@' && stack == 0 {
-                let regex = Regex::new(r"^@[a-zA-Z0-9]+").unwrap();
+                let regex = Regex::new(r"^@[a-zA-Z0-9_]+").unwrap();
+
+                if !regex.is_match(&text[offset..]) {
+                    continue;
+                }
 
                 let replacement = regex.replacen(&text[offset..], 1, |caps: &Captures| {
                     let capture = &caps[0][1..];
@@ -84,9 +97,16 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
         false
     }
 
+    let var_regex = Regex::new(r"(@[a-zA-Z0-9_]+)").unwrap();
+    let pretty = text.trim().replace("|", &"|".blue());
+    let pretty = var_regex.replace_all(&pretty, "$1".pink());
+
+    let var_regex = Regex::new(r"@\(([a-zA-Z0-9_]+)").unwrap();
+    let pretty = var_regex.replace_all(&pretty, format!("@({}", "$1".pink()));
+
+
     let mut steps = vec![];
 
-    let before = text.clone();
     let mut times = 0;
 
     while left_derive(&mut text, vars) {
@@ -94,18 +114,15 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
         times += 1;
 
         if times > 16 {
-            println!("too many times");
-            break;
+            println!("{} {}", "process".pink(), pretty);
+            for step in steps {
+                println!("        {}", step.grey());
+            }
+            panic!("too many times");
         }
     }
 
-    let var_regex = Regex::new(r"(@[^()]+)").unwrap();
-    let pretty = before.trim().replace("|", &"|".blue());
-    let pretty = var_regex.replace_all(&pretty, "$1".pink());
-
-    let var_regex = Regex::new(r"@\(([a-zA-Z0-9_]+)").unwrap();
-    let pretty = var_regex.replace_all(&pretty, format!("@({}", "$1".pink()));
-
+    
     println!("{} {}", "process".pink(), pretty);
     //println!("{} {}", "process".pink(), before.trim().replace("@", &"@".blue()).replace("|", &"|".blue()));
     for step in steps {
@@ -115,16 +132,16 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
     text
 }
 
+/*fn split_balanced<'a, 'b>(text: &'a str, on: &char, on: &'b str) -> &'a str {
+    
+}*/
+
 fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
     let mut defs = HashMap::new();
 
     let part_regex = Regex::new(r"(\S+)\s*(\S.*)?").unwrap();
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
-    //let args_regex = Regex::new(r#"'[^']*'|\S+"#).unwrap();
 
-    let mut parts = text.split('|').into_iter();
-
-    
     let mut parts = vec![];
     let mut start = 0;
     let mut quoted = false;
@@ -257,7 +274,7 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
             "concat" => {
                 state = inputs.iter().join("");
             }
-            "debug_nothing" => {
+            "noop" => {
                 state = inputs.iter().join(" ");
             }
             "debug_dash" => {
@@ -470,7 +487,7 @@ fn test_subcalls() {
     let cases = [
         ("a bb ccc", "a bb ccc"),
         ("a bb ccc | invalid | add x", ""),
-        ("a bb ccc | debug_nothing |", ""),
+        ("a bb ccc | noop |", ""),
         ("", ""),
         ("|", ""),
 
@@ -482,8 +499,8 @@ fn test_subcalls() {
         ("a bb ccc | prepend xxy ''", "xxya a xxybb bb xxyccc ccc"),
         ("a bb ccc | prepend xxy \"\"", r#"xxya ""a xxybb ""bb xxyccc ""ccc"#),
 
-        ("a bb ccc | concat | debug_dash | add xx yyy z | debug_nothing", "------ xx yyy z"),
-        ("a bb ccc \" \" | debug_nothing a b \"< >\"", "a bb ccc \" \""),
+        ("a bb ccc | concat | debug_dash | add xx yyy z | noop", "------ xx yyy z"),
+        ("a bb ccc \" \" | noop a b \"< >\"", "a bb ccc \" \""),
         ("a bb ccc \" \" | debug_dash", "- -- --- ---"),
         ("a bb ccc ' ' | debug_dash", "- -- --- -"),
 
@@ -524,9 +541,9 @@ fn test_subcalls() {
         
         // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),
-        (r#" '' ' ' '""' 'a"b"c' a"b" '" "b' | quote | debug_nothing"#, ""),        
+        (r#" '' ' ' '""' 'a"b"c' a"b" '" "b' | quote | noop"#, ""),        
         (r#"a a"b"c a"b"c"d " "b e | quote"#, r#"a"b"c"#),
-        (r#"a a"b"c"d " "b e | debug_nothing"#, r#"a"b"c"#),*/
+        (r#"a a"b"c"d " "b e | noop"#, r#"a"b"c"#),*/
     ];
 
     let mut defs = HashMap::new();
@@ -539,4 +556,25 @@ fn test_subcalls() {
 
     assert_eq!(defs.get("key1"), Some(&String::from("a definition")));
     assert_eq!(defs.get("key2"), Some(&String::from("a definition")));
+}
+
+#[test]
+fn test_derivation() {
+
+    let mut vars = BTreeMap::new();
+    vars.insert(String::from("out"), String::from("bin"));
+    vars.insert(String::from("1"), String::from("aa"));
+    vars.insert(String::from("2"), String::from("bb"));
+    
+    #[rustfmt::skip]
+    let cases = [
+        ("@out '@out' @( '@' | noop)2", "bin '@out' bb"),
+        ("@1 '@2' @('@' | noop)", "aa '@2' @"),
+    ];
+
+    for (case, correct) in cases {
+        let line = derive(case.to_string(), &mut vars);
+        assert_eq!(&line, &correct);
+        println!();
+    }
 }

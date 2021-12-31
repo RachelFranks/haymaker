@@ -10,7 +10,7 @@ command = concat
 
 eeee: aaaa | bbbb cccc | dddd
 
-#	echo @(derive | exclude @(1) @(out) | exclude @hide | @command)
+	echo @(derive | exclude @(1) @(out) | exclude @hide | @command)
 
 #	echo @(derive | exclude @1)
 

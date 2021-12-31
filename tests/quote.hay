@@ -1,0 +1,6 @@
+
+
+
+test:
+	echo @out '@out' @( '@' | noop)out
+	echo @out '@out' @( '@' | noop)out
