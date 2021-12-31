@@ -1,0 +1,6 @@
+
+
+loop = @loop
+
+test:
+	echo @loop

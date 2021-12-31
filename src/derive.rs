@@ -5,10 +5,17 @@ use regex::Regex;
 use std::collections::{BTreeMap, HashSet, HashMap};
 use std::process::Command;
 
-pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
+pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>, level: usize) -> String {
     //
-    pub fn left_derive(text: &mut String, vars: &mut BTreeMap<String, String>) -> bool {
+
+    if level > 64 {
+        panic!("Recursed too far")
+    }
+    
+    pub fn left_derive(text: &mut String, vars: &mut BTreeMap<String, String>, level: usize) -> bool {
         // recursively replace the leftmost instance of each @() or @"" in the string
+
+        
 
         let mut stack: usize = 0;
         let mut start = None;
@@ -62,7 +69,7 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
                         false => text[inner..offset].to_owned(),
                     };
 
-                    let (replacement, defs) = subcall(derive(found, vars), true);
+                    let (replacement, defs) = subcall(derive(found, vars, level), true);
                     vars.extend(defs.into_iter());
 
                     *text = match offset + 1 < text.len() {
@@ -85,9 +92,16 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
     let mut steps = vec![];
 
     let before = text.clone();
+    let mut times = 0;
 
-    while left_derive(&mut text, vars) {
+    while left_derive(&mut text, vars, level + 1) {
         steps.push(text.clone());
+        times += 1;
+
+        if times > 16 {
+            println!("too many times");
+            break;
+        }
     }
 
     let var_regex = Regex::new(r"(@[^()]+)").unwrap();
