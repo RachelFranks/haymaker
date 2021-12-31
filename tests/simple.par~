@@ -1,6 +1,0 @@
-
-
-message: a.txt b.txt c.txt
-	echo $(cat a) $(cat b) $(cat c)
-
-a.txt: b.txt
