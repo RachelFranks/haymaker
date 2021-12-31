@@ -1,6 +1,7 @@
 
 
-loop = @loop
+simple = @)
 
-test:
-	echo @loop
+output:
+	echo @(simple)
+

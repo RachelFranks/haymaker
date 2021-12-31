@@ -1,21 +1,15 @@
+//
+
 use crate::color::Color;
 use itertools::Itertools;
 use regex::Captures;
 use regex::Regex;
-use std::collections::{BTreeMap, HashSet, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::process::Command;
 
-pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>, level: usize) -> String {
-    //
-
-    if level > 64 {
-        panic!("Recursed too far")
-    }
-    
-    pub fn left_derive(text: &mut String, vars: &mut BTreeMap<String, String>, level: usize) -> bool {
+pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
+    pub fn left_derive(text: &mut String, vars: &mut BTreeMap<String, String>) -> bool {
         // recursively replace the leftmost instance of each @() or @"" in the string
-
-        
 
         let mut stack: usize = 0;
         let mut start = None;
@@ -35,7 +29,7 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>, level: usiz
             }
 
             if curr == '@' && stack == 0 {
-                let regex = Regex::new(r"^@[a-zA-Z0-9']+").unwrap();
+                let regex = Regex::new(r"^@[a-zA-Z0-9]+").unwrap();
 
                 let replacement = regex.replacen(&text[offset..], 1, |caps: &Captures| {
                     let capture = &caps[0][1..];
@@ -69,7 +63,7 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>, level: usiz
                         false => text[inner..offset].to_owned(),
                     };
 
-                    let (replacement, defs) = subcall(derive(found, vars, level), true);
+                    let (replacement, defs) = subcall(derive(found, vars), true);
                     vars.extend(defs.into_iter());
 
                     *text = match offset + 1 < text.len() {
@@ -94,7 +88,7 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>, level: usiz
     let before = text.clone();
     let mut times = 0;
 
-    while left_derive(&mut text, vars, level + 1) {
+    while left_derive(&mut text, vars) {
         steps.push(text.clone());
         times += 1;
 
@@ -121,9 +115,8 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>, level: usiz
 }
 
 fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
-
     let mut defs = HashMap::new();
-    
+
     let part_regex = Regex::new(r"(\S+)\s*(\S.*)?").unwrap();
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
     //let args_regex = Regex::new(r#"'[^']*'|\S+"#).unwrap();
@@ -133,14 +126,17 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
 
     if debug {
         let full = text.trim().replace("|", &"|".blue());
-        println!(
-            "{} {}{}{}",
-            "\nsubcall".blue(),
-            "@(".blue(),
-            full,
-            ")".blue()
-        );
+        println!("{} {}{}{}", "\nsubcall".blue(), "@(".blue(), full, ")".blue());
         println!("  {} {}", "input".grey(), &state);
+    }
+
+    macro_rules! error {
+        ($message:expr) => {{
+            if debug {
+                println!("  {} {}", "error".grey(), $message.red());
+            }
+            return (String::new(), HashMap::new());
+        }};
     }
 
     for part in parts {
@@ -202,13 +198,7 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
 
                 (command, args)
             }
-            None => {
-                if debug {
-                    println!("  {} {}", "error".grey(), "command not found".red());
-                    println!();
-                }
-                return (String::from(""), HashMap::new());
-            }
+            None => error!("command not found"),
         };
 
         if debug {
@@ -232,12 +222,45 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
         }
 
         match command {
+            "concat" => {
+                state = inputs.iter().join("");
+            }
+            "count" | "gnu_words" => {
+                state = inputs.len().to_string();
+            }
             "debug_nothing" => {
                 state = inputs.iter().join(" ");
             }
             "debug_dash" => {
                 state = inputs.iter().map(|s| s.replace(|_| true, "-")).join(" ");
             }
+            "include" => {
+                state = inputs.iter().filter(|s| args.contains(&s)).join(" ");
+            }
+            "exclude" => {
+                state = inputs.iter().filter(|s| !args.contains(&s)).join(" ");
+            }
+            "quote" => {
+                state = inputs.iter().map(|s| format!("'{}'", s)).join(" ");
+            }
+
+            "first" => match inputs.get(0) {
+                Some(first) => state = first.to_string(),
+                None => error!("no first input"),
+            },
+            "gnu_firstword" => match inputs.get(0) {
+                Some(first) => state = first.to_string(),
+                None => state = String::new(),
+            },
+            "last" => match inputs.last() {
+                Some(first) => state = first.to_string(),
+                None => error!("no last input"),
+            },
+            "gnu_lastword" => match inputs.last() {
+                Some(first) => state = first.to_string(),
+                None => state = String::new(),
+            },
+
             "add" => {
                 inputs.extend(args);
                 state = inputs.iter().join(" ");
@@ -251,29 +274,28 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
                 }
                 state = outputs.join(" ");
             }
-            "compact" => {
-                let mut output = vec![];
-                for input in state.split(' ') {
-                    if input != "" {
-                        output.push(input);
-                    }
-                }
-                state = output.join(" ");
-            }
-            "concat" => {
-                state = inputs.iter().join("");
-            }
+
             "def" => {
                 for arg in &args {
                     defs.insert(arg.to_string(), state.to_owned());
                 }
             }
-            "exclude" => {
-                state = inputs.iter().filter(|s| !args.contains(&s)).join(" ");
-            }
-            "include" => {
-                state = inputs.iter().filter(|s| args.contains(&s)).join(" ");
-            }
+
+            "filter" => {}
+            "gnu_filter" => {}
+            "gnu_filter-out" => {}
+            "gnu_findstring" => {}
+
+            "gnu_lastword" => {}
+            "gnu_sort" => {}
+            "gnu_strip" => {}
+            "gnu_subst" => {}
+            "gnu_patsubst" => {}
+            "gnu_wordlist" => {}
+
+            "index" => {}
+            "gnu_word" => {}
+
             "pop" => {
                 inputs.pop();
                 state = inputs.iter().join(" ");
@@ -301,15 +323,20 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
                     let error = String::from_utf8_lossy(&output.stderr);
                     println!("  {} {}: {}", "error".grey(), "shell failure".red(), error);
                     println!();
-                    return (String::from(""), HashMap::new())
+                    return (String::new(), HashMap::new());
                 }
 
                 state = String::from_utf8_lossy(&output.stdout).to_string();
             }
             "split" => {
-                let mut outputs: Vec<_> = inputs;//.into_iter().map(String::from).collect();
+                let mut outputs: Vec<_> = inputs; //.into_iter().map(String::from).collect();
                 for arg in &args {
-                    outputs = outputs.into_iter().map(|s| s.split(arg)).flatten().map(|s| s).collect();
+                    outputs = outputs
+                        .into_iter()
+                        .map(|s| s.split(arg))
+                        .flatten()
+                        .map(|s| s)
+                        .collect();
                 }
                 state = outputs.into_iter().filter(|s| s != &"").join(" ");
             }
@@ -326,16 +353,9 @@ fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
                 }
                 state = outputs.join(" ");
             }
-            "quote" => {
-                state = inputs.iter().map(|s| format!("'{}'", s)).join(" ");
-            }
             unknown => {
                 if debug {
-                    println!(
-                        "  {} {} is not a valid command",
-                        "error".grey(),
-                        unknown.red()
-                    );
+                    println!("  {} {} is not a valid command", "error".grey(), unknown.red());
                     println!();
                     return (String::from(""), HashMap::new());
                 }
@@ -390,8 +410,25 @@ fn test_subcalls() {
         ("a definition | def key1 key2", "a definition"),
 
         ("please remove my e's | append ~ | split e | concat | split ~", "plas rmov my 's"),
-        ("a b c d | pop", "a b c"),
+        ("a b c d | pop | pop", "a b"),
 
+        ("one two three four 5 6 seven | count", "7"),
+        ("one two three four 5 6 seven | gnu_words", "7"),
+
+        /*("one two three four 5 6 seven |    index 4         ", "four"),
+        ("one two three four 5 6 seven | gnu_word 4         ", "four"),
+        ("one two three four 5 6 seven |    index 8 | add xx", ""),
+        ("one two three four 5 6 seven | gnu_word 8 | add xx", "xx"),*/
+
+        ("one two three four 5 6 seven | first", "one"),
+        ("one two three four 5 6 seven | gnu_firstword", "one"),
+        ("one two three four 5 6 seven | last", "seven"),
+        ("one two three four 5 6 seven | gnu_lastword", "seven"),
+        (" | first         | add xx", ""),
+        (" | gnu_firstword | add xx", "xx"),
+        (" | last          | add xx", ""),
+        (" | gnu_lastword  | add xx", "xx"),
+        
         // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),
         (r#" '' ' ' '""' 'a"b"c' a"b" '" "b' | quote | debug_nothing"#, ""),        
