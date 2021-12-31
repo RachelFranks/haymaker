@@ -2,13 +2,12 @@ use crate::color::Color;
 use itertools::Itertools;
 use regex::Captures;
 use regex::Regex;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet, HashMap};
 use std::process::Command;
 
-pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
+pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
     //
-
-    pub fn left_derive(text: &mut String, vars: &BTreeMap<String, String>) -> bool {
+    pub fn left_derive(text: &mut String, vars: &mut BTreeMap<String, String>) -> bool {
         // recursively replace the leftmost instance of each @() or @"" in the string
 
         let mut stack: usize = 0;
@@ -63,7 +62,8 @@ pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
                         false => text[inner..offset].to_owned(),
                     };
 
-                    let replacement = subcall(derive(found, vars), true);
+                    let (replacement, defs) = subcall(derive(found, vars), true);
+                    vars.extend(defs.into_iter());
 
                     *text = match offset + 1 < text.len() {
                         true => text[..at_sign].to_owned() + &replacement + &text[(offset + 1)..],
@@ -106,7 +106,10 @@ pub fn derive(mut text: String, vars: &BTreeMap<String, String>) -> String {
     text
 }
 
-fn subcall(text: String, debug: bool) -> String {
+fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
+
+    let mut defs = HashMap::new();
+    
     let part_regex = Regex::new(r"(\S+)\s*(\S.*)?").unwrap();
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
     //let args_regex = Regex::new(r#"'[^']*'|\S+"#).unwrap();
@@ -190,7 +193,7 @@ fn subcall(text: String, debug: bool) -> String {
                     println!("  {} {}", "error".grey(), "command not found".red());
                     println!();
                 }
-                return String::from("");
+                return (String::from(""), HashMap::new());
             }
         };
 
@@ -246,6 +249,11 @@ fn subcall(text: String, debug: bool) -> String {
             "concat" => {
                 state = inputs.iter().join("");
             }
+            "def" => {
+                for arg in &args {
+                    defs.insert(arg.to_string(), state.to_owned());
+                }
+            }
             "exclude" => {
                 state = inputs.iter().filter(|s| !args.contains(&s)).join(" ");
             }
@@ -275,17 +283,17 @@ fn subcall(text: String, debug: bool) -> String {
                     let error = String::from_utf8_lossy(&output.stderr);
                     println!("  {} {}: {}", "error".grey(), "shell failure".red(), error);
                     println!();
-                    return String::from("");
+                    return (String::from(""), HashMap::new())
                 }
 
                 state = String::from_utf8_lossy(&output.stdout).to_string();
             }
             "split" => {
-                /*let arg = match args.get(0) {
-                    Some(arg) => arg,
-                    None => " ",
-                };*/
-                //state = state.split(args).join(" ");
+                let mut outputs: Vec<_> = inputs;//.into_iter().map(String::from).collect();
+                for arg in &args {
+                    outputs = outputs.into_iter().map(|s| s.split(arg)).flatten().map(|s| s).collect();
+                }
+                state = outputs.into_iter().filter(|s| s != &"").join(" ");
             }
             "unquote" => {
                 let mut outputs = vec![];
@@ -311,7 +319,7 @@ fn subcall(text: String, debug: bool) -> String {
                         unknown.red()
                     );
                     println!();
-                    return String::from("");
+                    return (String::from(""), HashMap::new());
                 }
             }
         }
@@ -322,10 +330,13 @@ fn subcall(text: String, debug: bool) -> String {
     }
 
     if debug {
+        for (def, value) in &defs {
+            println!("    {} {} {} {}", "def".pink(), def, "≡".pink(), value);
+        }
         println!();
     }
 
-    state.trim().to_owned()
+    (state.trim().to_owned(), defs)
 }
 
 #[test]
@@ -352,7 +363,13 @@ fn test_subcalls() {
         ("a bb ccc ' ' | debug_dash", "- -- --- -"),
 
         ("echo -n hello | shell", "hello"),
-        ("fail -n hello | shell", "hello"),
+        ("fail -n hello | shell", ""),
+
+        ("wow,this,is,cool | split ,", "wow this is cool"),
+        ("wow,this,is,cool | split , o", "w w this is c l"),
+        ("wow,this,is,cool | split is t s", "wow, h , ,cool"),
+
+        ("a definition | def key1 key2", "a definition"),
 
         // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),
@@ -361,7 +378,14 @@ fn test_subcalls() {
         (r#"a a"b"c"d " "b e | debug_nothing"#, r#"a"b"c"#),*/
     ];
 
+    let mut defs = HashMap::new();
+
     for (case, correct) in cases {
-        assert_eq!(&subcall(case.to_string(), true), &correct);
+        let (text, new_defs) = subcall(case.to_string(), true);
+        defs.extend(new_defs.into_iter());
+        assert_eq!(&text, &correct);
     }
+
+    assert_eq!(defs.get("key1"), Some(&String::from("a definition")));
+    assert_eq!(defs.get("key2"), Some(&String::from("a definition")));
 }

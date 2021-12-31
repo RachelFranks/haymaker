@@ -1,0 +1,9 @@
+
+redef = @( nothing | def redef | add this will only appear once)
+
+example:
+	echo @( gm | def x y)
+	echo @x to you too!
+
+	echo "@redef" @redef
+
