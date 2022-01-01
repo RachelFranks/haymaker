@@ -1,0 +1,25 @@
+
+inline = some /*text*/ with /*comments*/ like /**/, /***/, /****/, etc
+three = a * cannot be used for both, though: /*/ */ <- the */ is needed
+
+start = the following should not be ran /*
+bad  = uh oh #interesting
+bad2 = uh oh // hmmmm
+bad3 = uh oh */ weird_but_allowed = here we are # other kind of comment
+
+first = there are 2 kinds of single-line comments these #heyoooooo
+second = @first and these // wowwwwwww
+
+scopes = scoping is fun /*/**/*/, /*/*a*/*/, /* /* /* b */ */ */
+
+/*/* /*
+bad4 = inner    */   <- there are 3 layers of nesting inside // should have no effect: */
+bad5 = middle   */   <- there are 2 layers of nesting inside # should have no effect: */
+bad6 = outer    */ # <- scoping ends with that */
+good = unscoped
+
+/*
+#*/
+//*/
+unclosed = unclosed comment blocks are allowed
+hidden = the rest of the file will be excluded

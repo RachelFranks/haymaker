@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 use crate::color::Color;
+use crate::comments::uncomment;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
 
@@ -22,6 +23,7 @@ use crate::def::DefParser;
 lalrpop_mod!(def);
 
 mod color;
+mod comments;
 mod derive;
 mod parsed;
 mod recipe;
@@ -31,16 +33,23 @@ mod text;
 #[structopt(name = "paramake", about = "A fearlessly parallel build system")]
 struct Opt {
     #[structopt(parse(from_os_str))]
-    makefile: PathBuf,
+    hayfile: PathBuf,
 }
 
 fn main() {
     let opt = Opt::from_args();
 
-    let lines = match File::open(&opt.makefile) {
+    /*let lines = match File::open(&opt.hayfile) {
         Ok(file) => BufReader::new(file).lines(),
-        Err(err) => panic!("Unable to open file {}: {}", opt.makefile.display(), err),
+        Err(err) => panic!("Unable to open file {}: {}", opt.hayfile.display(), err),
+    };*/
+
+    let hayfile = match std::fs::read_to_string(&opt.hayfile) {
+        Ok(hayfile) => hayfile,
+        Err(err) => panic!("Unable to open file {}: {}", opt.hayfile.display(), err),
     };
+
+    let lines = uncomment(&hayfile, "");
 
     let vars_regex = Regex::new(r"[a-zA-Z0-9]+").unwrap();
     let blank_regex = Regex::new(r"^\s*$").unwrap();
@@ -48,8 +57,8 @@ fn main() {
     let mut recipes: Vec<Recipe> = vec![];
     let mut variables = BTreeMap::new();
 
-    for line in lines.filter_map(|x| x.ok()) {
-        // Makefiles are context-sensitive, so we must determine how to handle each line
+    for line in lines {
+        // Hayfiles are context-sensitive, so we must determine how to handle each line
 
         if blank_regex.is_match(&line) {
             // skip blanks for performance

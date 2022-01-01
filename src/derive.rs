@@ -5,8 +5,8 @@ use itertools::Itertools;
 use regex::Captures;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::process::{Command, Stdio};
 use std::io::Write;
+use std::process::{Command, Stdio};
 
 pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
     pub fn left_derive(text: &mut String, vars: &mut BTreeMap<String, String>) -> bool {
@@ -104,7 +104,6 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
     let var_regex = Regex::new(r"@\(([a-zA-Z0-9_]+)").unwrap();
     let pretty = var_regex.replace_all(&pretty, format!("@({}", "$1".pink()));
 
-
     let mut steps = vec![];
 
     let mut times = 0;
@@ -122,7 +121,6 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
         }
     }
 
-    
     println!("{} {}", "process".pink(), pretty);
     //println!("{} {}", "process".pink(), before.trim().replace("@", &"@".blue()).replace("|", &"|".blue()));
     for step in steps {
@@ -133,7 +131,7 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
 }
 
 /*fn split_balanced<'a, 'b>(text: &'a str, on: &char, on: &'b str) -> &'a str {
-    
+
 }*/
 
 fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
@@ -560,12 +558,11 @@ fn test_subcalls() {
 
 #[test]
 fn test_derivation() {
-
     let mut vars = BTreeMap::new();
     vars.insert(String::from("out"), String::from("bin"));
     vars.insert(String::from("1"), String::from("aa"));
     vars.insert(String::from("2"), String::from("bb"));
-    
+
     #[rustfmt::skip]
     let cases = [
         ("@out '@out' @( '@' | noop)2", "bin '@out' bb"),
