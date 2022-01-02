@@ -1,7 +1,8 @@
 
-import src/Makefile
+import
+import src/hayfile 'path/to another/hayfile'
 
-files = rule here
+/*files = rule here
 multi = @first second = @third = 32
 
 aaaa:

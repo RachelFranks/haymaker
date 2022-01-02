@@ -1,6 +1,8 @@
 //
 
 use crate::console::Color;
+use crate::text::Text;
+
 use itertools::Itertools;
 use regex::Captures;
 use regex::Regex;
@@ -130,32 +132,18 @@ pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>) -> String {
     text
 }
 
-/*fn split_balanced<'a, 'b>(text: &'a str, on: &char, on: &'b str) -> &'a str {
-
-}*/
-
 fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
     let mut defs = HashMap::new();
 
     let part_regex = Regex::new(r"(\S+)\s*(\S.*)?").unwrap();
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
 
-    let mut parts = vec![];
-    let mut start = 0;
-    let mut quoted = false;
-    for (offset, c) in text.char_indices() {
-        if c == '\'' {
-            quoted = !quoted;
-        }
-        if !quoted && c == '|' {
-            parts.push(&text[start..offset]);
-            start = offset + 1;
-        }
-    }
-    parts.push(&text[start..]);
+    let mut parts = text.split_when_balanced('|', '\'').into_iter();
 
-    let mut parts = parts.into_iter();
-    let mut state = parts.next().unwrap().trim().to_owned();
+    let mut state = match parts.next() {
+        Some(state) => state.trim().to_owned(),
+        None => String::new(),
+    };
 
     if debug {
         let full = text.trim().replace("|", &"|".blue());
@@ -485,7 +473,7 @@ fn test_subcalls() {
     let cases = [
         ("a bb ccc", "a bb ccc"),
         ("a bb ccc | invalid | add x", ""),
-        ("a bb ccc | noop |", ""),
+        ("a bb ccc | noop |", "a bb ccc"),
         ("", ""),
         ("|", ""),
 

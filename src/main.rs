@@ -6,6 +6,7 @@ use crate::comments::uncomment;
 use crate::console::Color;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
+use crate::text::Text;
 
 use itertools::Itertools;
 use petgraph::{stable_graph::StableGraph, Direction};
@@ -63,7 +64,7 @@ fn main() {
     };
 
     let mut recipes: Vec<Recipe> = vec![];
-    let mut variables = BTreeMap::new();
+    let mut vars = BTreeMap::new();
     let lines = uncomment(&haysource, "");
 
     for (index, line) in lines.into_iter().enumerate() {
@@ -74,7 +75,7 @@ fn main() {
             continue;
         }
 
-        if line.starts_with("\t") {
+        if line.starts_with(char::is_whitespace) {
             // shell source can have arbitrary text & starts after the tab
 
             let recipe = match recipes.last_mut() {
@@ -92,21 +93,28 @@ fn main() {
             continue;
         }
 
+        if line.starts_with("import") {
+            let line = &line[6..];
+            let imports = line.split_when_balanced(' ', '\'');
+            for import in imports {
+                println!("importing {}", import.pink());
+            }
+            continue;
+        }
+
         if line.contains("=") {
             // variable assignments
 
-            let mut sides: Vec<_> = line.split('=').collect();
-            sides.reverse();
+            let sides = line.split('=').into_iter().rev();
 
-            for (value, dest) in sides.into_iter().tuple_windows() {
+            for (value, dest) in sides.tuple_windows() {
                 let value = value.trim();
                 let assigns = regexes::VAR.captures_iter(dest).map(|x| x[0].to_string());
 
                 for assign in assigns {
-                    variables.insert(assign, value.to_string());
+                    vars.insert(assign, value.to_string());
                 }
             }
-
             continue;
         }
 
@@ -119,10 +127,6 @@ fn main() {
         if let MakeLine::Rule(rule) = parsed {
             let recipe = Recipe::from(rule);
             recipes.push(recipe);
-            continue;
-        }
-
-        if let MakeLine::Import(_import) = parsed {
             continue;
         }
     }
@@ -144,13 +148,13 @@ fn main() {
 
         for node in ready {
             let recipe = &graph[node];
-            recipe.execute(&variables);
+            recipe.execute(&vars);
             graph.remove_node(node);
         }
     }
 
-    /*println!("Variables");
-    for (variable, value) in variables {
+    /*println!("Vars");
+    for (variable, value) in vars {
         println!("  {}: {}", variable, value);
     }*/
 }
