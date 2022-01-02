@@ -1,8 +1,14 @@
 
-import
-import src/hayfile 'path/to another/hayfile'
+folder = src
+import = include
 
-/*files = rule here
+#include src src/hayfile 'path/to another/hayfile'
+
+@import
++@import @folder/hayfile 'path/to another/hayfile'
+
+/*
+files = rule here
 multi = @first second = @third = 32
 
 aaaa:
