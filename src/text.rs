@@ -1,12 +1,13 @@
 pub trait Text {
     fn split_when_balanced(&self, on: char, quote: char) -> Vec<&str>;
+    fn split_when_balanced_with_offsets(&self, on: char, quote: char) -> Vec<(usize, &str)>;
 }
 
 impl<T> Text for T
 where
     T: std::convert::AsRef<str>,
 {
-    fn split_when_balanced(&self, on: char, quote: char) -> Vec<&str> {
+    fn split_when_balanced_with_offsets(&self, on: char, quote: char) -> Vec<(usize, &str)> {
         let text = self.as_ref();
 
         let mut parts = vec![];
@@ -17,11 +18,16 @@ where
                 quoted = !quoted;
             }
             if !quoted && c == on {
-                parts.push(&text[start..offset]);
+                parts.push((start, &text[start..offset]));
                 start = offset + 1;
             }
         }
-        parts.push(&text[start..]);
-        parts.into_iter().filter(|s| !s.is_empty()).collect()
+        parts.push((start, &text[start..]));
+        parts.into_iter().filter(|(_, s)| !s.is_empty()).collect()
+    }
+
+    fn split_when_balanced(&self, on: char, quote: char) -> Vec<&str> {
+        let splits = self.split_when_balanced_with_offsets(on, quote);
+        splits.into_iter().map(|(_, s)| s).collect()
     }
 }

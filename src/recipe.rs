@@ -66,7 +66,7 @@ impl Recipe {
         vars.insert(String::from("out"), out.join(" "));
 
         for line in &self.source {
-            let line = derive(line.clone(), &mut vars);
+            let line = derive(line.clone(), &mut vars, false);
 
             println!("bash: {}", line.grey());
             let command = Command::new("sh").arg("-c").arg(line).output();

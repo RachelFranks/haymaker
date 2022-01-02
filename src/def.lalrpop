@@ -1,5 +1,5 @@
 
-use crate::parsed::{MakeLine, Rule, Import};
+use crate::parsed::{MakeLine, Rule};
 use std::path::PathBuf;
 
 grammar();
@@ -21,15 +21,7 @@ Delimit<T, U>: Vec<T> = {
 
 pub Def: Option<MakeLine> = {
     Rule => Some(<>),
-    Import => Some(<>),
     => None,
-};
-
-Import: MakeLine = {
-    "import" <files: Path+> => {
-        let import = Import { files };
-        MakeLine::Import(import)
-    },
 };
 
 Rule: MakeLine = {

@@ -4,6 +4,7 @@
 
 use crate::comments::uncomment;
 use crate::console::Color;
+use crate::derive::derive;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
 use crate::text::Text;
@@ -70,12 +71,21 @@ fn main() {
     for (index, line) in lines.into_iter().enumerate() {
         // Hayfiles are context-sensitive, so we must determine how to handle each line
 
-        if line.trim() == "" {
+        let lineno = index + 1;
+        let source = &line;
+        let mut line = line.trim();
+
+        if line == "" {
             // skip blanks for performance
             continue;
         }
 
-        if line.starts_with(char::is_whitespace) {
+        let debug = line.chars().next() == Some('+');
+        if debug {
+            line = &line[1..];
+        }
+
+        if source.starts_with(char::is_whitespace) {
             // shell source can have arbitrary text & starts after the tab
 
             let recipe = match recipes.last_mut() {
@@ -83,22 +93,17 @@ fn main() {
                 None => {
                     let kind = "Structure";
                     let message = "stray shell code outside of a recipe";
-                    console::pretty_print_error(kind, &message, &filename, &line, index + 1, 1);
+                    let mut column = source.chars().position(|c| !c.is_whitespace()).unwrap();
+                    if debug {
+                        column += 1;
+                    }
+                    console::print_source_error(kind, &message, &filename, &source, lineno, column);
                     std::process::exit(1);
                 }
             };
 
             let source_line = line[1..].to_string();
             recipe.source.push(source_line);
-            continue;
-        }
-
-        if line.starts_with("import") {
-            let line = &line[6..];
-            let imports = line.split_when_balanced(' ', '\'');
-            for import in imports {
-                println!("importing {}", import.pink());
-            }
             continue;
         }
 
@@ -113,6 +118,53 @@ fn main() {
 
                 for assign in assigns {
                     vars.insert(assign, value.to_string());
+                }
+            }
+            continue;
+        }
+
+        let raw = line.clone();
+        let line = derive(line.to_string(), &mut vars, debug);
+
+        if line.starts_with("include") {
+            //
+
+            let mut includes = line.split_when_balanced_with_offsets(' ', '\'').into_iter();
+            includes.next(); // discard the "import"
+
+            for (mut offset, include) in includes {
+                //
+
+                if !Path::new(include).exists() {
+                    let kind = "Include";
+                    let message = format!("file {} does not exist", include.red());
+
+                    if line == raw {
+                        if debug {
+                            offset += 1;
+                        }
+                        console::print_source_error(
+                            kind, &message, &filename, &source, lineno, offset,
+                        );
+                    } else {
+                        let note = format!("{}: {} {}", "note".white(), "this was", raw.grey());
+                        let help = format!(
+                            "{}: place a {} before the line to enable debug mode",
+                            "help".white(),
+                            "+".mint()
+                        );
+
+                        let info = match debug {
+                            true => vec![note],
+                            false => vec![note, help],
+                        };
+
+                        console::print_processed_error(
+                            kind, &message, &filename, &line, info, lineno, offset,
+                        );
+                    }
+
+                    std::process::exit(1);
                 }
             }
             continue;

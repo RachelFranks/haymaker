@@ -1,4 +1,3 @@
-use crate::console::Color;
 use itertools::Itertools;
 
 pub fn uncomment(text: &str, blank: &str) -> Vec<String> {
@@ -51,6 +50,7 @@ pub fn uncomment(text: &str, blank: &str) -> Vec<String> {
 
 #[test]
 fn test_comments() {
+    use crate::console::Color;
     let hayfile = std::fs::read_to_string("tests/comments.hay").unwrap();
     let txtfile = std::fs::read_to_string("tests/comments.txt").unwrap();
 
