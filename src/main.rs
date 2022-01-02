@@ -2,8 +2,8 @@
 // Copyright 2021, Rachel Franks. All rights reserved
 //
 
-use crate::color::Color;
 use crate::comments::uncomment;
+use crate::console::Color;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
 
@@ -19,8 +19,8 @@ use lalrpop_util::lalrpop_mod;
 use crate::def::DefParser;
 lalrpop_mod!(def);
 
-mod color;
 mod comments;
+mod console;
 mod derive;
 mod parsed;
 mod recipe;
@@ -52,18 +52,21 @@ fn main() {
         }
     };
 
+    let filename = hayfile.to_string_lossy();
+
     let haysource = match std::fs::read_to_string(&hayfile) {
         Ok(haysource) => haysource,
         Err(err) => {
-            println!("Could not open {}\n{}", hayfile.to_string_lossy().red(), err);
+            println!("Could not open {}\n{}", filename.red(), err);
             std::process::exit(1);
         }
     };
 
     let mut recipes: Vec<Recipe> = vec![];
     let mut variables = BTreeMap::new();
+    let lines = uncomment(&haysource, "");
 
-    for line in uncomment(&haysource, "") {
+    for (index, line) in lines.into_iter().enumerate() {
         // Hayfiles are context-sensitive, so we must determine how to handle each line
 
         if line.trim() == "" {
@@ -77,7 +80,10 @@ fn main() {
             let recipe = match recipes.last_mut() {
                 Some(recipe) => recipe,
                 None => {
-                    panic!("No recipe");
+                    let kind = "Structure";
+                    let message = "stray shell code outside of a recipe";
+                    console::pretty_print_error(kind, &message, &filename, &line, index + 1, 1);
+                    std::process::exit(1);
                 }
             };
 

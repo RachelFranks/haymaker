@@ -23,10 +23,10 @@ pub trait Color {
 }
 
 #[rustfmt::skip]
-impl<T> Color for T where T: std::convert::AsRef<str> {
+impl<T> Color for T where T: std::fmt::Display {
 
     fn color(&self, color: &str) -> String {
-        format!("{}{}{}", color, self.as_ref(), RESET)
+        format!("{}{}{}", color, self, RESET)
     }
 
     fn blue(&self)   -> String { self.color(BLUE)   }
@@ -36,4 +36,31 @@ impl<T> Color for T where T: std::convert::AsRef<str> {
     fn pink(&self)   -> String { self.color(PINK)   }
     fn red(&self)    -> String { self.color(RED)    }
     fn yellow(&self) -> String { self.color(YELLOW) }
+}
+
+pub fn pretty_print_error(
+    kind: &str,
+    message: &str,
+    filename: &str,
+    line: &str,
+    num: usize,
+    column: usize,
+) {
+    let len = num.to_string().len();
+    let margin = " ".repeat(len);
+    let pipe = "║".blue();
+
+    let arrow = "╔═══════".blue();
+    let position = format!("line {} column {}", num.blue(), column.blue());
+    let editor = format!("({}:{}:{})", filename, num, column).grey();
+
+    let line = line.replace('\t', " ");
+
+    println!();
+    println!("{}: {}", kind.red(), message);
+    println!("{} {} {} {} {}", margin, arrow, filename.blue(), position, editor);
+    println!("{} {}", margin, pipe);
+    println!("{} {} {}", num.blue(), pipe, line);
+    println!("{} {} {}{}", margin, pipe, " ".repeat(column), "^".red());
+    println!();
 }

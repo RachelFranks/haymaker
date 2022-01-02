@@ -1,4 +1,4 @@
-use crate::color::Color;
+use crate::console::Color;
 use crate::derive::derive;
 use crate::parsed::Rule;
 use std::collections::BTreeMap;

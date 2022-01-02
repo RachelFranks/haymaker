@@ -1,6 +1,6 @@
 //
 
-use crate::color::Color;
+use crate::console::Color;
 use itertools::Itertools;
 use regex::Captures;
 use regex::Regex;
