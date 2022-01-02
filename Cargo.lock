@@ -172,6 +172,7 @@ dependencies = [
  "itertools",
  "lalrpop",
  "lalrpop-util",
+ "lazy_static",
  "petgraph 0.6.0",
  "regex",
  "structopt",

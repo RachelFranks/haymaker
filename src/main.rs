@@ -2,20 +2,17 @@
 // Copyright 2021, Rachel Franks. All rights reserved
 //
 
-use itertools::Itertools;
-use petgraph::{stable_graph::StableGraph, Direction};
-use regex::Regex;
-use std::collections::BTreeMap;
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::path::PathBuf;
-use structopt::StructOpt;
-
 use crate::color::Color;
 use crate::comments::uncomment;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
+
+use itertools::Itertools;
+use petgraph::{stable_graph::StableGraph, Direction};
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::path::PathBuf;
+use structopt::StructOpt;
 
 use lalrpop_util::lalrpop_mod;
 //use lalrpop_util::ParseError;
@@ -27,40 +24,49 @@ mod comments;
 mod derive;
 mod parsed;
 mod recipe;
+mod regexes;
 mod text;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "paramake", about = "A fearlessly parallel build system")]
+#[structopt(name = "haymaker", about = "A fearlessly parallel build system")]
 struct Opt {
     #[structopt(parse(from_os_str))]
-    hayfile: PathBuf,
+    hayfile: Option<PathBuf>,
 }
 
 fn main() {
     let opt = Opt::from_args();
 
-    /*let lines = match File::open(&opt.hayfile) {
-        Ok(file) => BufReader::new(file).lines(),
-        Err(err) => panic!("Unable to open file {}: {}", opt.hayfile.display(), err),
-    };*/
+    let hayfile = match opt.hayfile {
+        Some(hayfile) => hayfile,
+        None => {
+            let defaults = ["hayfile", "Hayfile", "makefile", "Makefile"];
 
-    let hayfile = match std::fs::read_to_string(&opt.hayfile) {
-        Ok(hayfile) => hayfile,
-        Err(err) => panic!("Unable to open file {}: {}", opt.hayfile.display(), err),
+            match defaults.into_iter().find(|file| Path::new(file).exists()) {
+                Some(hayfile) => Path::new(hayfile).to_path_buf(),
+                None => {
+                    println!("No {} in current directory", "hayfile".red());
+                    std::process::exit(1);
+                }
+            }
+        }
     };
 
-    let lines = uncomment(&hayfile, "");
-
-    let vars_regex = Regex::new(r"[a-zA-Z0-9]+").unwrap();
-    let blank_regex = Regex::new(r"^\s*$").unwrap();
+    let haysource = match std::fs::read_to_string(&hayfile) {
+        Ok(haysource) => haysource,
+        Err(err) => {
+            println!("Could not open {}\n{}", hayfile.to_string_lossy().red(), err);
+            std::process::exit(1);
+        }
+    };
 
     let mut recipes: Vec<Recipe> = vec![];
     let mut variables = BTreeMap::new();
 
-    for line in lines {
+    for line in uncomment(&haysource, "") {
         // Hayfiles are context-sensitive, so we must determine how to handle each line
 
-        if blank_regex.is_match(&line) {
+        if line.trim() == "" {
             // skip blanks for performance
             continue;
         }
@@ -88,7 +94,7 @@ fn main() {
 
             for (value, dest) in sides.into_iter().tuple_windows() {
                 let value = value.trim();
-                let assigns = vars_regex.captures_iter(dest).map(|x| x[0].to_string());
+                let assigns = regexes::VAR.captures_iter(dest).map(|x| x[0].to_string());
 
                 for assign in assigns {
                     variables.insert(assign, value.to_string());

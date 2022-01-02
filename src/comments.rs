@@ -1,4 +1,3 @@
-use crate::color::Color;
 use itertools::Itertools;
 
 pub fn uncomment(text: &str, blank: &str) -> Vec<String> {
@@ -7,17 +6,12 @@ pub fn uncomment(text: &str, blank: &str) -> Vec<String> {
     let mut output = vec![];
     let mut scopes = 0_usize;
 
-    for mut source_line in lines.clone() {
+    for source_line in lines {
         let mut line = String::with_capacity(source_line.len());
-
-        let mut chars = source_line
-            .char_indices()
-            .chain(std::iter::once((0, ' ')))
-            .tuple_windows();
-
         let mut ignore_scope_changes = false;
+        let mut chars = source_line.chars().chain(std::iter::once(' ')).tuple_windows();
 
-        while let Some(((offset, c), (_, n))) = chars.next() {
+        while let Some((c, n)) = chars.next() {
             if !ignore_scope_changes {
                 if c == '/' && n == '*' {
                     scopes += 1;
