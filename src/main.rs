@@ -102,8 +102,7 @@ fn main() {
                 }
             };
 
-            let source_line = line[1..].to_string();
-            recipe.source.push(source_line);
+            recipe.source.push(line.to_string());
             continue;
         }
 

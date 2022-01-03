@@ -1,6 +1,7 @@
 pub trait Text {
     fn split_when_balanced(&self, on: char, quote: char) -> Vec<&str>;
     fn split_when_balanced_with_offsets(&self, on: char, quote: char) -> Vec<(usize, &str)>;
+    fn or_quotes(&self) -> String;
 }
 
 impl<T> Text for T
@@ -29,5 +30,13 @@ where
     fn split_when_balanced(&self, on: char, quote: char) -> Vec<&str> {
         let splits = self.split_when_balanced_with_offsets(on, quote);
         splits.into_iter().map(|(_, s)| s).collect()
+    }
+
+    fn or_quotes(&self) -> String {
+        let text = self.as_ref();
+        String::from(match text == "" {
+            true => "''",
+            false => text,
+        })
     }
 }

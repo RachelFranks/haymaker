@@ -24,14 +24,14 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
     };
 
     'top: loop {
-        let padding = vec![(text.len(), ' ')];
+        let padding = vec![(text.len(), ' '), (text.len() + 1, ' ')];
         let mut iter = text.char_indices().chain(padding).tuple_windows();
 
         let mut start = None;
         let mut end = None;
         let mut quoted = false;
 
-        while let Some(((offset, c), (_, n))) = iter.next() {
+        for ((offset, c), (_, n), (_, a)) in iter {
             if c == '\'' {
                 quoted = !quoted;
             }
@@ -49,7 +49,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
             }
 
             if c == '@' {
-                if let Some(mat) = regexes::VAR_AT.find(&text[offset..]) {
+                if let Some(mat) = regexes::VAR_AT_WITH_SIGN.find(&text[offset..]) {
                     let start = offset + mat.start();
                     let end = offset + mat.end();
                     let var = &mat.as_str()[1..];
@@ -60,7 +60,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
                     };
 
                     if debug {
-                        intos.push(format!("{} => {}", mat.as_str(), replace));
+                        intos.push(format!("{} » {}", var, replace.or_quotes()));
                     }
 
                     text = match end < text.len() {
@@ -76,8 +76,21 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
         }
 
         if let (Some(start), Some(end)) = (start, end) {
-            let inner = &text[start + 2..end - 1];
-            let (replace, _) = subcall(inner, debug);
+            let mut inner = text[start + 2..end - 1].to_owned();
+
+            if let Some(mat) = regexes::VAR_AT.find(&inner) {
+                let var = match vars.get(mat.as_str()) {
+                    Some(replace) => replace,
+                    None => "",
+                };
+
+                match mat.end() < inner.len() {
+                    true => inner = var.to_owned() + &inner[mat.end()..],
+                    false => inner = var.to_owned(),
+                }
+            }
+
+            let (replace, _) = subcall(&inner, debug);
 
             text = match end < text.len() {
                 true => text[0..start].to_owned() + &replace + &text[end..],
@@ -85,7 +98,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
             };
             if debug {
                 steps.push(text.clone());
-                intos.push(format!("@(...) => {}", replace));
+                intos.push(format!("@(..) » {}", replace.or_quotes()));
             }
             continue;
         }
@@ -95,14 +108,15 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
 
     if debug {
         let mut steps = steps.into_iter();
-        println!("{} {}", "process".pink(), steps.next().unwrap());
+        println!("{} {}", "derive".pink(), add_highlights(steps.next().unwrap()));
 
         let width = intos.iter().map(|x| x.len()).max().unwrap_or(0);
 
         for (step, into) in steps.zip(intos.iter()) {
             let spacing = " ".repeat(width - into.len());
-            println!("  {} {} {}", into.grey(), spacing, step);
+            println!("  {} {} {}", into.dim(), spacing, add_highlights(step));
         }
+        println!();
     }
 
     text.to_string()
@@ -443,6 +457,65 @@ fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
     (state.trim().to_owned(), defs)
 }
 
+fn add_highlights(text: String) -> String {
+    let padding = vec![(text.len(), ' ')];
+    let mut iter = text.char_indices().chain(padding).tuple_windows();
+    let mut out = String::with_capacity(text.len());
+    out += crate::console::GREY;
+
+    let mut stack = 0_usize;
+    let mut quoted = false;
+    let mut coloring = false;
+
+    let blue = crate::console::BLUE;
+    let pink = crate::console::PINK;
+    let grey = crate::console::GREY;
+
+    while let Some(((offset, c), (_, n))) = iter.next() {
+        if coloring && !c.is_alphanumeric() {
+            out += grey;
+            coloring = false;
+        }
+
+        if c == '\'' {
+            quoted = !quoted;
+        }
+        if quoted {
+            out.push(c);
+            continue;
+        }
+
+        if let ('@', '(') = (c, n) {
+            out += &format!("{}{}{}", blue, "@(", pink);
+            stack += 1;
+            coloring = true;
+            iter.next();
+            continue;
+        }
+
+        if stack > 0 && c == ')' {
+            stack -= 1;
+            out += &format!("{}{}{}", blue, ")", grey);
+            continue;
+        }
+
+        if stack > 0 && c == '|' {
+            out += &format!("{}{}{}", blue, "|", grey);
+            continue;
+        }
+
+        if c == '@' && n.is_alphanumeric() {
+            out += &format!("{}{}", pink, "@");
+            coloring = true;
+            continue;
+        }
+
+        out.push(c);
+    }
+
+    out.grey()
+}
+
 #[test]
 fn test_subcalls() {
     #[rustfmt::skip]
@@ -529,8 +602,11 @@ fn test_derivation() {
 
     #[rustfmt::skip]
     let cases = [
+        ("echo hi", "echo hi"),
         ("@1 @out @1 '@out' @( '@' | noop)2", "aa bin aa '@out' bb"),
         ("@1 '@2' @('@' | noop)", "aa '@2' @"),
+        ("@(out) @out @(@(out)) @(@(out | noop)) out", "bin bin   out"),
+        ("@( out) @( out | noop) @(1)", "out out aa"),
     ];
 
     for (case, correct) in cases {
