@@ -6,19 +6,28 @@ use std::process::Command;
 
 pub struct Recipe {
     pub rule: Rule,
-    pub source: Vec<String>,
+    pub commands: Vec<ShellCommand>,
+}
+
+pub struct ShellCommand {
+    pub line: String,
+    pub debug: bool,
 }
 
 impl From<Rule> for Recipe {
     fn from(rule: Rule) -> Self {
         Recipe {
             rule,
-            source: vec![],
+            commands: vec![],
         }
     }
 }
 
 impl Recipe {
+    pub fn add_command(&mut self, line: String, debug: bool) {
+        self.commands.push(ShellCommand { line, debug });
+    }
+
     pub fn print(&self) {
         for (index, output) in self.rule.outputs.iter().enumerate() {
             let spacer = match index {
@@ -42,7 +51,8 @@ impl Recipe {
         }
         println!("");
 
-        for line in &self.source {
+        for command in &self.commands {
+            let line = &command.line;
             println!("\t{}", line.grey());
         }
     }
@@ -65,8 +75,11 @@ impl Recipe {
         vars.insert(String::from("all"), all.join(" "));
         vars.insert(String::from("out"), out.join(" "));
 
-        for line in &self.source {
-            let line = derive(&line, &mut vars, false);
+        for command in &self.commands {
+            let line = &command.line;
+            let debug = command.debug;
+
+            let line = derive(&line, &mut vars, debug);
 
             println!("bash: {}", line.grey());
             let command = Command::new("sh").arg("-c").arg(line).output();

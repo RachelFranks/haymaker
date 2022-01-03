@@ -1,0 +1,5 @@
+foo = @( hi | append hello)
+bar = @(foo | append world)
+
+output:
+	echo @(bar)

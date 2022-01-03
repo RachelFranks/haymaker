@@ -84,17 +84,16 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
                     None => "",
                 };
 
+                let var = format!(" {}", var);
+                let implied = text[0..start + 2].to_owned() + &var + &text[end - 1..];
+
                 if debug {
-                    let var = format!(" {}", var);
-                    let implied = text[0..start + 2].to_owned() + &var + &text[end - 1..];
-                    steps.push(implied);
+                    steps.push(implied.clone());
                     intos.push((format!("{} » '{}'", inner, var.or_quotes()), None));
                 }
 
-                match mat.end() < inner.len() {
-                    true => inner = var.to_owned() + &inner[mat.end()..],
-                    false => inner = var.to_owned(),
-                }
+                text = implied;
+                continue;
             }
 
             let (replace, printable) = subcall(&inner, vars, debug);

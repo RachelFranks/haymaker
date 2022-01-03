@@ -102,7 +102,7 @@ fn main() {
                 }
             };
 
-            recipe.source.push(line.to_string());
+            recipe.add_command(line.to_string(), debug);
             continue;
         }
 
