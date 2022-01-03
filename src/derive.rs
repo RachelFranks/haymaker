@@ -1,6 +1,7 @@
 //
 
 use crate::console::Color;
+use crate::regexes;
 use crate::text::Text;
 
 use itertools::Itertools;
@@ -10,135 +11,104 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-pub fn derive(mut text: String, vars: &mut BTreeMap<String, String>, debug: bool) -> String {
+type VarMap = BTreeMap<String, String>;
+
+pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
     //
 
-    pub fn left_derive(
-        text: &mut String,
-        vars: &mut BTreeMap<String, String>,
-        debug: bool,
-    ) -> bool {
-        // recursively replace the leftmost instance of each @() or @"" in the string
+    let mut text = text.to_owned();
+    let mut intos = vec![];
+    let mut steps = match debug {
+        true => vec![text.clone()],
+        false => vec![],
+    };
 
-        let mut stack: usize = 0;
+    'top: loop {
+        let padding = vec![(text.len(), ' ')];
+        let mut iter = text.char_indices().chain(padding).tuple_windows();
+
         let mut start = None;
+        let mut end = None;
         let mut quoted = false;
 
-        text.push(' ');
-        text.push(' ');
-
-        for ((offset, curr), (_, next), (_, then)) in text.clone().char_indices().tuple_windows() {
-            //
-
-            if curr == '\'' {
+        while let Some(((offset, c), (_, n))) = iter.next() {
+            if c == '\'' {
                 quoted = !quoted;
             }
-
             if quoted {
                 continue;
             }
 
-            if (curr, next) == ('@', '(') {
-                if stack == 0 {
-                    start = Some((offset, then));
-                }
-
-                stack += 1;
+            if let ('@', '(') = (c, n) {
+                start = Some(offset);
             }
 
-            if curr == '@' && stack == 0 {
-                let regex = Regex::new(r"^@[a-zA-Z0-9_]+").unwrap();
+            if start.is_some() && c == ')' {
+                end = Some(offset + 1);
+                break;
+            }
 
-                if !regex.is_match(&text[offset..]) {
-                    continue;
-                }
+            if c == '@' {
+                if let Some(mat) = regexes::VAR_AT.find(&text[offset..]) {
+                    let start = offset + mat.start();
+                    let end = offset + mat.end();
+                    let var = &mat.as_str()[1..];
 
-                let replacement = regex.replacen(&text[offset..], 1, |caps: &Captures| {
-                    let capture = &caps[0][1..];
-
-                    let substitution = match vars.get(capture) {
-                        Some(substitution) => substitution,
+                    let replace = match vars.get(var) {
+                        Some(replace) => replace,
                         None => "",
                     };
 
-                    format!("{}", substitution)
-                });
+                    if debug {
+                        intos.push(format!("{} => {}", mat.as_str(), replace));
+                    }
 
-                *text = text[..offset].to_owned() + &replacement;
-                text.pop();
-                text.pop();
-                return true;
-            }
-
-            if curr == ')' {
-                stack = stack.saturating_sub(1);
-
-                if stack != 0 {
-                    continue;
-                }
-
-                if let Some((at_sign, first_char)) = start {
-                    let inner = at_sign + 2;
-
-                    let found = match first_char.is_alphanumeric() {
-                        true => String::from("@") + &text[inner..offset],
-                        false => text[inner..offset].to_owned(),
+                    text = match end < text.len() {
+                        true => text[0..start].to_owned() + &replace + &text[end..],
+                        false => text[0..start].to_owned() + &replace,
                     };
-
-                    let (replacement, defs) = subcall(derive(found, vars, debug), debug);
-                    vars.extend(defs.into_iter());
-
-                    *text = match offset + 1 < text.len() {
-                        true => text[..at_sign].to_owned() + &replacement + &text[(offset + 1)..],
-                        false => text[..at_sign].to_owned() + &replacement,
-                    };
-
-                    text.pop();
-                    text.pop();
-                    return true;
+                    if debug {
+                        steps.push(text.clone());
+                    }
+                    continue 'top;
                 }
             }
         }
 
-        text.pop();
-        text.pop();
-        false
+        if let (Some(start), Some(end)) = (start, end) {
+            let inner = &text[start + 2..end - 1];
+            let (replace, _) = subcall(inner, debug);
+
+            text = match end < text.len() {
+                true => text[0..start].to_owned() + &replace + &text[end..],
+                false => text[0..start].to_owned() + &replace,
+            };
+            if debug {
+                steps.push(text.clone());
+                intos.push(format!("@(...) => {}", replace));
+            }
+            continue;
+        }
+
+        break;
     }
 
-    let var_regex = Regex::new(r"(@[a-zA-Z0-9_]+)").unwrap();
-    let pretty = text.trim().replace("|", &"|".blue());
-    let pretty = var_regex.replace_all(&pretty, "$1".pink());
+    if debug {
+        let mut steps = steps.into_iter();
+        println!("{} {}", "process".pink(), steps.next().unwrap());
 
-    let var_regex = Regex::new(r"@\(([a-zA-Z0-9_]+)").unwrap();
-    let pretty = var_regex.replace_all(&pretty, format!("@({}", "$1".pink()));
+        let width = intos.iter().map(|x| x.len()).max().unwrap_or(0);
 
-    let mut steps = vec![];
-
-    let mut times = 0;
-
-    while left_derive(&mut text, vars, debug) {
-        steps.push(text.clone());
-        times += 1;
-
-        if times > 16 {
-            println!("{} {}", "process".pink(), pretty);
-            for step in steps {
-                println!("        {}", step.grey());
-            }
-            panic!("too many times");
+        for (step, into) in steps.zip(intos.iter()) {
+            let spacing = " ".repeat(width - into.len());
+            println!("  {} {} {}", into.grey(), spacing, step);
         }
     }
 
-    println!("{} {}", "process".pink(), pretty);
-    //println!("{} {}", "process".pink(), before.trim().replace("@", &"@".blue()).replace("|", &"|".blue()));
-    for step in steps {
-        println!("        {}", step.grey());
-    }
-
-    text
+    text.to_string()
 }
 
-fn subcall(text: String, debug: bool) -> (String, HashMap<String, String>) {
+fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
     let mut defs = HashMap::new();
 
     let part_regex = Regex::new(r"(\S+)\s*(\S.*)?").unwrap();
@@ -541,7 +511,7 @@ fn test_subcalls() {
     let mut defs = HashMap::new();
 
     for (case, correct) in cases {
-        let (text, new_defs) = subcall(case.to_string(), true);
+        let (text, new_defs) = subcall(&case, true);
         defs.extend(new_defs.into_iter());
         assert_eq!(&text, &correct);
     }
@@ -559,12 +529,12 @@ fn test_derivation() {
 
     #[rustfmt::skip]
     let cases = [
-        ("@out '@out' @( '@' | noop)2", "bin '@out' bb"),
+        ("@1 @out @1 '@out' @( '@' | noop)2", "aa bin aa '@out' bb"),
         ("@1 '@2' @('@' | noop)", "aa '@2' @"),
     ];
 
     for (case, correct) in cases {
-        let line = derive(case.to_string(), &mut vars, true);
+        let line = derive(&case, &mut vars, true);
         assert_eq!(&line, &correct);
         println!();
     }

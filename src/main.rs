@@ -124,7 +124,7 @@ fn main() {
         }
 
         let raw = line.clone();
-        let line = derive(line.to_string(), &mut vars, debug);
+        let line = derive(&line, &mut vars, debug);
 
         if line.starts_with("include") {
             //
