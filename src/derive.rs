@@ -18,6 +18,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
 
     let mut text = text.to_owned();
     let mut intos = vec![];
+    let mut subcalls = vec![];
     let mut steps = match debug {
         true => vec![text.clone()],
         false => vec![],
@@ -90,7 +91,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
                 }
             }
 
-            let (replace, _) = subcall(&inner, debug);
+            let (replace, printable) = subcall(&inner, vars, debug);
 
             text = match end < text.len() {
                 true => text[0..start].to_owned() + &replace + &text[end..],
@@ -99,6 +100,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
             if debug {
                 steps.push(text.clone());
                 intos.push(format!("@(..) » {}", replace.or_quotes()));
+                subcalls.push(printable)
             }
             continue;
         }
@@ -117,13 +119,18 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
             println!("  {} {} {}", into.dim(), spacing, add_highlights(step));
         }
         println!();
+
+        for subcall in subcalls {
+            println!("{}", subcall);
+        }
     }
 
     text.to_string()
 }
 
-fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
-    let mut defs = HashMap::new();
+fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
+    let mut printable = String::new();
+    let mut defs = VarMap::new();
 
     let part_regex = Regex::new(r"(\S+)\s*(\S.*)?").unwrap();
     let args_regex = Regex::new(r#"'[^']*'|"[^"]*"|\S+"#).unwrap();
@@ -135,19 +142,32 @@ fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
         None => String::new(),
     };
 
+    macro_rules! save {
+        () => {{
+            printable += "\n";
+        }};
+        ($format:expr $(,$args:expr)* $(,)?) => {{
+            printable += &format!($format, $($args,)*);
+            printable += "\n";
+        }};
+        (@$format:expr $(,$args:expr)* $(,)?) => {{
+            printable += &format!($format, $($args,)*);
+        }};
+    };
+
     if debug {
         let full = text.trim().replace("|", &"|".blue());
-        println!("{} {}{}{}", "\nsubcall".blue(), "@(".blue(), full, ")".blue());
-        println!("  {} {}", "input".grey(), &state);
+        save!("{} {}{}{}", "subcall".blue(), "@(".blue(), full, ")".blue());
+        save!("  {} {}", "input".grey(), &state);
     }
 
     macro_rules! error {
         ($format:expr $(,$args:expr)* $(,)?) => {{
             let message = format!($format, $($args,)*);
             if debug {
-                println!("  {} {}", "error".grey(), message.red());
+                save!("  {} {}", "error".grey(), message.red());
             }
-            return (String::new(), HashMap::new());
+            return (String::new(), printable);
         }};
     }
 
@@ -180,18 +200,18 @@ fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
         }
 
         if debug {
-            print!("  {} ", "state".grey());
+            save!(@"  {} ", "state".grey());
             for (index, input) in inputs.iter().enumerate() {
                 let wrap = match quoted_inputs.contains(&index) {
                     true => "'".grey(),
                     false => "".to_owned(),
                 };
                 match index {
-                    0 => print!("{}{}{}", wrap, input, wrap),
-                    _ => print!("{} {}{}{}", ",".grey(), wrap, input, wrap),
+                    0 => save!(@"{}{}{}", wrap, input, wrap),
+                    _ => save!(@"{} {}{}{}", ",".grey(), wrap, input, wrap),
                 }
             }
-            println!();
+            save!();
         }
 
         let (command, args) = match part_regex.captures(part) {
@@ -240,7 +260,7 @@ fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
                 }
             }
 
-            println!("{}", line);
+            save!("{}", line);
         }
 
         match command {
@@ -284,6 +304,7 @@ fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
             "def" => {
                 for arg in &args {
                     defs.insert(arg.to_string(), state.to_owned());
+                    vars.insert(arg.to_string(), state.to_owned());
                 }
             }
             "drop" => {
@@ -397,8 +418,8 @@ fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
 
                 if !output.status.success() {
                     let error = String::from_utf8_lossy(&output.stderr);
-                    println!("  {} {}: {}", "error".grey(), "shell failure".red(), error);
-                    return (String::new(), HashMap::new());
+                    save!("  {} {}: {}", "error".grey(), "shell failure".red(), error);
+                    return (String::new(), printable);
                 }
 
                 state = String::from_utf8_lossy(&output.stdout).to_string();
@@ -429,32 +450,31 @@ fn subcall(text: &str, debug: bool) -> (String, HashMap<String, String>) {
                 state = outputs.join(" ");
             }
             "stop" => {
-                println!("    {} {}", "out".grey(), &state);
-                return (state, defs);
+                save!("    {} {}", "out".grey(), &state);
+                return (state, printable);
             }
             "error" => error!("called error"),
             "suppress_errors" => {}
             unknown => {
                 if debug {
-                    println!("  {} {} is not a valid command", "error".grey(), unknown.red());
-                    return (String::from(""), HashMap::new());
+                    save!("  {} {} is not a valid command", "error".grey(), unknown.red());
+                    return (String::from(""), printable);
                 }
             }
         }
 
         if debug {
-            println!("    {} {}", "out".grey(), &state);
+            save!("    {} {}", "out".grey(), &state);
         }
     }
 
     if debug {
         for (def, value) in &defs {
-            println!("    {} {} {} {}", "def".pink(), def, "≡".pink(), value);
+            save!("    {} {} {} {}", "def".pink(), def, "≡".pink(), value);
         }
-        println!();
     }
 
-    (state.trim().to_owned(), defs)
+    (state.trim().to_owned(), printable)
 }
 
 fn add_highlights(text: String) -> String {
@@ -581,16 +601,16 @@ fn test_subcalls() {
         (r#"a a"b"c"d " "b e | noop"#, r#"a"b"c"#),*/
     ];
 
-    let mut defs = HashMap::new();
+    let mut vars = VarMap::new();
 
     for (case, correct) in cases {
-        let (text, new_defs) = subcall(&case, true);
-        defs.extend(new_defs.into_iter());
+        let (text, printable) = subcall(&case, &mut vars, true);
+        println!("{}", printable);
         assert_eq!(&text, &correct);
     }
 
-    assert_eq!(defs.get("key1"), Some(&String::from("a definition")));
-    assert_eq!(defs.get("key2"), Some(&String::from("a definition")));
+    assert_eq!(vars.get("key1"), Some(&String::from("a definition")));
+    assert_eq!(vars.get("key2"), Some(&String::from("a definition")));
 }
 
 #[test]
@@ -612,6 +632,5 @@ fn test_derivation() {
     for (case, correct) in cases {
         let line = derive(&case, &mut vars, true);
         assert_eq!(&line, &correct);
-        println!();
     }
 }
