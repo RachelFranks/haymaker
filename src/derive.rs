@@ -18,7 +18,6 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
 
     let mut text = text.to_owned();
     let mut intos = vec![];
-    let mut subcalls = vec![];
     let mut steps = match debug {
         true => vec![text.clone()],
         false => vec![],
@@ -61,7 +60,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
                     };
 
                     if debug {
-                        intos.push(format!("{} » {}", var, replace.or_quotes()));
+                        intos.push((format!("{} » {}", var, replace.or_quotes()), None));
                     }
 
                     text = match end < text.len() {
@@ -85,6 +84,13 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
                     None => "",
                 };
 
+                if debug {
+                    let var = format!(" {}", var);
+                    let implied = text[0..start + 2].to_owned() + &var + &text[end - 1..];
+                    steps.push(implied);
+                    intos.push((format!("{} » '{}'", inner, var.or_quotes()), None));
+                }
+
                 match mat.end() < inner.len() {
                     true => inner = var.to_owned() + &inner[mat.end()..],
                     false => inner = var.to_owned(),
@@ -99,8 +105,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
             };
             if debug {
                 steps.push(text.clone());
-                intos.push(format!("@(..) » {}", replace.or_quotes()));
-                subcalls.push(printable)
+                intos.push((format!("@(..) » {}", replace.or_quotes()), Some(printable)));
             }
             continue;
         }
@@ -112,17 +117,18 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
         let mut steps = steps.into_iter();
         println!("{} {}", "derive".pink(), add_highlights(steps.next().unwrap()));
 
-        let width = intos.iter().map(|x| x.len()).max().unwrap_or(0);
+        let width = intos.iter().map(|x| x.0.len()).max().unwrap_or(0);
 
-        for (step, into) in steps.zip(intos.iter()) {
+        for (step, (into, subcall)) in steps.zip(intos.iter()) {
+            if let Some(subcall) = subcall {
+                let pipe = "║".blue();
+                let margin = format!("\n  {} ", pipe);
+                println!("\n  {} {}\n", pipe, subcall.replace("\n", &margin));
+            }
             let spacing = " ".repeat(width - into.len());
             println!("  {} {} {}", into.dim(), spacing, add_highlights(step));
         }
         println!();
-
-        for subcall in subcalls {
-            println!("{}", subcall);
-        }
     }
 
     text.to_string()
@@ -158,7 +164,10 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
     if debug {
         let full = text.trim().replace("|", &"|".blue());
         save!("{} {}{}{}", "subcall".blue(), "@(".blue(), full, ")".blue());
-        save!("  {} {}", "input".grey(), &state);
+
+        if parts.as_slice().is_empty() {
+            save!("    {} {}", "out".grey(), &state);
+        }
     }
 
     macro_rules! error {
@@ -472,6 +481,7 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
         for (def, value) in &defs {
             save!("    {} {} {} {}", "def".pink(), def, "≡".pink(), value);
         }
+        printable.pop();
     }
 
     (state.trim().to_owned(), printable)
