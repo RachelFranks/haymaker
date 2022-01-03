@@ -23,7 +23,14 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
         false => vec![],
     };
 
+    let mut count = 0;
+
     'top: loop {
+        if count == 1024 {
+            break;
+        }
+        count += 1;
+
         let padding = vec![(text.len(), ' '), (text.len() + 1, ' ')];
         let mut iter = text.char_indices().chain(padding).tuple_windows();
 
@@ -79,20 +86,21 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
             let mut inner = text[start + 2..end - 1].to_owned();
 
             if let Some(mat) = regexes::VAR_AT.find(&inner) {
-                let var = match vars.get(mat.as_str()) {
+                let mat = mat.as_str();
+                let var = match vars.get(mat) {
                     Some(replace) => replace,
                     None => "",
                 };
 
+                let end = start + 2 + mat.len();
+
                 let var = format!(" {}", var);
-                let implied = text[0..start + 2].to_owned() + &var + &text[end - 1..];
+                text = text[0..start + 2].to_owned() + &var + &text[end..];
 
                 if debug {
-                    steps.push(implied.clone());
-                    intos.push((format!("{} » '{}'", inner, var.or_quotes()), None));
+                    steps.push(text.clone());
+                    intos.push((format!("{} » '{}'", mat, var.or_quotes()), None));
                 }
-
-                text = implied;
                 continue;
             }
 
@@ -114,7 +122,8 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
 
     if debug {
         let mut steps = steps.into_iter();
-        println!("{} {}", "derive".pink(), add_highlights(steps.next().unwrap()));
+        let first = steps.next().unwrap();
+        println!("{} {}", "derive".pink(), add_derivation_highlights(&first));
 
         let width = intos.iter().map(|x| x.0.len()).max().unwrap_or(0);
 
@@ -125,9 +134,13 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
                 println!("\n  {} {}\n", pipe, subcall.replace("\n", &margin));
             }
             let spacing = " ".repeat(width - into.len());
-            println!("  {} {} {}", into.dim(), spacing, add_highlights(step));
+            println!("  {} {} {}", into.dim(), spacing, add_derivation_highlights(&step));
         }
         println!();
+    }
+
+    if count == 1024 {
+        panic!("Too many times");
     }
 
     text.to_string()
@@ -486,7 +499,7 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
     (state.trim().to_owned(), printable)
 }
 
-fn add_highlights(text: String) -> String {
+pub fn add_derivation_highlights(text: &str) -> String {
     let padding = vec![(text.len(), ' ')];
     let mut iter = text.char_indices().chain(padding).tuple_windows();
     let mut out = String::with_capacity(text.len());

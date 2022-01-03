@@ -1,6 +1,8 @@
 use crate::console::Color;
+use crate::derive::add_derivation_highlights;
 use crate::derive::derive;
 use crate::parsed::Rule;
+
 use std::collections::BTreeMap;
 use std::process::Command;
 
@@ -52,8 +54,8 @@ impl Recipe {
         println!("");
 
         for command in &self.commands {
-            let line = &command.line;
-            println!("\t{}", line.grey());
+            let line = add_derivation_highlights(&command.line);
+            println!("\t{}", line);
         }
     }
 
@@ -81,7 +83,7 @@ impl Recipe {
 
             let line = derive(&line, &mut vars, debug);
 
-            println!("bash: {}", line.grey());
+            println!("{}", line.grey());
             let command = Command::new("sh").arg("-c").arg(line).output();
 
             let output = match command {

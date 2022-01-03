@@ -4,6 +4,7 @@
 
 use crate::comments::uncomment;
 use crate::console::Color;
+use crate::derive::add_derivation_highlights;
 use crate::derive::derive;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
@@ -182,6 +183,11 @@ fn main() {
         }
     }
 
+    for (variable, value) in &vars {
+        println!("{} {} {}", variable, "≡".pink(), add_derivation_highlights(value));
+    }
+    println!();
+
     for recipe in &recipes {
         recipe.print();
         println!();
@@ -203,9 +209,4 @@ fn main() {
             graph.remove_node(node);
         }
     }
-
-    /*println!("Vars");
-    for (variable, value) in vars {
-        println!("  {}: {}", variable, value);
-    }*/
 }
