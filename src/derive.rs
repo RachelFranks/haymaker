@@ -5,13 +5,12 @@ use crate::regexes;
 use crate::text::Text;
 
 use itertools::Itertools;
-use regex::Captures;
 use regex::Regex;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-type VarMap = BTreeMap<String, String>;
+pub type VarMap = HashMap<String, String>;
 
 pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
     //
@@ -31,14 +30,16 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
         }
         count += 1;
 
-        let padding = vec![(text.len(), ' '), (text.len() + 1, ' ')];
-        let mut iter = text.char_indices().chain(padding).tuple_windows();
+        let iter = text
+            .char_indices()
+            .chain(std::iter::once((text.len(), ' ')))
+            .tuple_windows();
 
         let mut start = None;
         let mut end = None;
         let mut quoted = false;
 
-        for ((offset, c), (_, n), (_, a)) in iter {
+        for ((offset, c), (_, n)) in iter {
             if c == '\'' {
                 quoted = !quoted;
             }
@@ -83,7 +84,7 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
         }
 
         if let (Some(start), Some(end)) = (start, end) {
-            let mut inner = text[start + 2..end - 1].to_owned();
+            let inner = text[start + 2..end - 1].to_owned();
 
             if let Some(mat) = regexes::VAR_AT.find(&inner) {
                 let mat = mat.as_str();
@@ -171,7 +172,7 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
         (@$format:expr $(,$args:expr)* $(,)?) => {{
             printable += &format!($format, $($args,)*);
         }};
-    };
+    }
 
     if debug {
         let full = text.trim().replace("|", &"|".blue());
@@ -267,7 +268,12 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
         if debug {
             let mut line = match args.is_empty() {
                 true => format!("   {} {}", "call".grey(), &command),
-                false => format!("   {} {} {}", "call".grey(), &command, "with args".grey()),
+                false => format!(
+                    "   {} {} {}",
+                    "call".grey(),
+                    &command,
+                    "with arg".plural(args.len()).grey()
+                ),
             };
 
             for (index, arg) in args.iter().enumerate() {
@@ -412,12 +418,68 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
                 }
                 state = outputs.into_iter().join(" ");
             }
-
-            "filter" => {}
-            "sift" => {}
-
+            "filter" => {
+                let mut patterns = vec![];
+                for arg in args {
+                    patterns.push(match Regex::new(arg) {
+                        Ok(pattern) => pattern,
+                        Err(err) => {
+                            let err = format!("\n{}", err).replace("\n", "\n        ");
+                            error!("failed to parse regex: {}\n{}", arg, err)
+                        }
+                    });
+                }
+                let mut outputs = vec![];
+                for input in inputs {
+                    if patterns.iter().any(|pat| !pat.is_match(input)) {
+                        continue;
+                    }
+                    outputs.push(input);
+                }
+                state = outputs.into_iter().join(" ");
+            }
+            "sift" => {
+                let mut patterns = vec![];
+                for arg in args {
+                    patterns.push(match Regex::new(arg) {
+                        Ok(pattern) => pattern,
+                        Err(err) => {
+                            let err = format!("\n{}", err).replace("\n", "\n        ");
+                            error!("failed to parse regex: {}\n{}", arg, err)
+                        }
+                    });
+                }
+                let mut outputs = vec![];
+                for input in inputs {
+                    if patterns.iter().any(|pat| pat.is_match(input)) {
+                        continue;
+                    }
+                    outputs.push(input);
+                }
+                state = outputs.into_iter().join(" ");
+            }
+            "sift-glob" => {
+                let mut patterns = vec![];
+                for arg in args {
+                    let arg = arg.replace("*", ".*");
+                    patterns.push(match Regex::new(&arg) {
+                        Ok(pattern) => pattern,
+                        Err(err) => {
+                            let err = format!("\n{}", err).replace("\n", "\n        ");
+                            error!("failed to parse regex: {}\n{}", arg, err)
+                        }
+                    });
+                }
+                let mut outputs = vec![];
+                for input in inputs {
+                    if patterns.iter().any(|pat| pat.is_match(input)) {
+                        continue;
+                    }
+                    outputs.push(input);
+                }
+                state = outputs.into_iter().join(" ");
+            }
             "replace" => {}
-
             "shell" => {
                 let mut child = Command::new("sh")
                     .arg("-c")
@@ -500,8 +562,7 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
 }
 
 pub fn add_derivation_highlights(text: &str) -> String {
-    let padding = vec![(text.len(), ' ')];
-    let mut iter = text.char_indices().chain(padding).tuple_windows();
+    let mut iter = text.chars().chain(std::iter::once(' ')).tuple_windows();
     let mut out = String::with_capacity(text.len());
     out += crate::console::GREY;
 
@@ -513,7 +574,7 @@ pub fn add_derivation_highlights(text: &str) -> String {
     let pink = crate::console::PINK;
     let grey = crate::console::GREY;
 
-    while let Some(((offset, c), (_, n))) = iter.next() {
+    while let Some((c, n)) = iter.next() {
         if coloring && !c.is_alphanumeric() {
             out += grey;
             coloring = false;
@@ -615,6 +676,13 @@ fn test_subcalls() {
         ("humanity <3 | shell wc -c", "11"),
         
         ("a a bb bb a c | shell cat '|' wc -c", "13"),
+
+        ("abcd aN32 23 32~e | sift      ^[a-z0-9]+$", "aN32 32~e"),
+        ("abcd aN32 23 32~e | sift   ^[a-z]+ [a-z]$", "23"),
+        ("abcd aN32 23 32~e | filter        [0-9]+$", "aN32 23"),
+        ("abcd aN32 23 32~e | filter            [0-", ""),
+
+        ("abcd aN32 23 32~e | sift-glob *32*", "abcd 23"),
         
         // TODO: decide on consistent quoting rules
         /*(r#" "ddd" " " "d d" "d  " " | unquote"#, "ddd   d d d   \""),
@@ -637,7 +705,7 @@ fn test_subcalls() {
 
 #[test]
 fn test_derivation() {
-    let mut vars = BTreeMap::new();
+    let mut vars = HashMap::new();
     vars.insert(String::from("out"), String::from("bin"));
     vars.insert(String::from("1"), String::from("aa"));
     vars.insert(String::from("2"), String::from("bb"));

@@ -1,9 +1,7 @@
 use crate::console::Color;
-use crate::derive::add_derivation_highlights;
-use crate::derive::derive;
+use crate::derive::{add_derivation_highlights, derive, VarMap};
 use crate::parsed::Rule;
 
-use std::collections::BTreeMap;
 use std::process::Command;
 
 pub struct Recipe {
@@ -59,7 +57,7 @@ impl Recipe {
         }
     }
 
-    pub fn execute(&self, globals: &BTreeMap<String, String>) {
+    pub fn execute(&self, globals: &VarMap) {
         let mut vars = globals.clone();
 
         let mut all = vec![];

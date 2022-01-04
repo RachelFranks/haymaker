@@ -2,6 +2,7 @@ pub trait Text {
     fn split_when_balanced(&self, on: char, quote: char) -> Vec<&str>;
     fn split_when_balanced_with_offsets(&self, on: char, quote: char) -> Vec<(usize, &str)>;
     fn or_quotes(&self) -> String;
+    fn plural(&self, num: usize) -> String;
 }
 
 impl<T> Text for T
@@ -38,5 +39,12 @@ where
             true => "''",
             false => text,
         })
+    }
+
+    fn plural(&self, num: usize) -> String {
+        match num {
+            1 => self.as_ref().to_string(),
+            _ => format!("{}s", self.as_ref()),
+        }
     }
 }

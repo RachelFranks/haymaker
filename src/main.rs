@@ -4,15 +4,13 @@
 
 use crate::comments::uncomment;
 use crate::console::Color;
-use crate::derive::add_derivation_highlights;
-use crate::derive::derive;
+use crate::derive::{add_derivation_highlights, derive, VarMap};
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
 use crate::text::Text;
 
 use itertools::Itertools;
 use petgraph::{stable_graph::StableGraph, Direction};
-use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -66,7 +64,7 @@ fn main() {
     };
 
     let mut recipes: Vec<Recipe> = vec![];
-    let mut vars = BTreeMap::new();
+    let mut vars = VarMap::new();
     let lines = uncomment(&haysource, "");
 
     for (index, line) in lines.into_iter().enumerate() {

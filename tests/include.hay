@@ -1,0 +1,7 @@
+folder = src
+import = include
+
+#include src src/hayfile 'path/to another/hayfile'
+
+@import
+@import @folder/hayfile 'path/to another/hayfile'

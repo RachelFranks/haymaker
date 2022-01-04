@@ -1,7 +1,5 @@
 foo = @( hi | add hello)
 bar = @(foo | add world)
 
-test = @test
-
 goal:
 	+echo @test

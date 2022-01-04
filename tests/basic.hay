@@ -1,14 +1,5 @@
 
-folder = src
-import = include
-
-#include src src/hayfile 'path/to another/hayfile'
-
-@import
-+@import @folder/hayfile 'path/to another/hayfile'
-
-/*
-files = rule here
+files = bbbb cccc
 multi = @first second = @third = 32
 
 aaaa:
@@ -19,10 +10,10 @@ bbbb:
 cccc: bbbb
 	echo @1
 
-dddd: aaaa bbbb cccc
+dddd: aaaa @files
 	echo @2 @1
 
-eeee: aaaa | bbbb cccc | dddd
+eeee: aaaa | @files | dddd
 	echo @all
 	echo @out
 	echo @2
