@@ -5,7 +5,6 @@
 use crate::comments::uncomment;
 use crate::console::Color;
 use crate::derive::{add_derivation_highlights, derive, VarMap};
-use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
 use crate::text::Text;
 
@@ -23,7 +22,6 @@ lalrpop_mod!(def);
 mod comments;
 mod console;
 mod derive;
-mod parsed;
 mod recipe;
 mod regexes;
 mod text;
@@ -168,17 +166,14 @@ fn main() {
             continue;
         }
 
-        let parsed = match DefParser::new().parse(&line) {
+        let rule = match DefParser::new().parse(&line) {
             Ok(Some(parsed)) => parsed,
             Err(err) => panic!("error parsing\n{}\n{}", line.red(), err),
             Ok(_) => continue,
         };
 
-        if let MakeLine::Rule(rule) = parsed {
-            let recipe = Recipe::from(rule);
-            recipes.push(recipe);
-            continue;
-        }
+        let recipe = Recipe::from(rule);
+        recipes.push(recipe);
     }
 
     for (variable, value) in &vars {

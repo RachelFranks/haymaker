@@ -1,12 +1,16 @@
 use crate::console::Color;
 use crate::derive::{add_derivation_highlights, derive, VarMap};
-use crate::parsed::Rule;
 
 use std::process::Command;
 
 pub struct Recipe {
     pub rule: Rule,
     pub commands: Vec<ShellCommand>,
+}
+
+pub struct Rule {
+    pub outputs: Vec<String>,
+    pub steps: Vec<Vec<String>>,
 }
 
 pub struct ShellCommand {
@@ -68,7 +72,7 @@ impl Recipe {
             all.push(input.clone());
         }
         for (index, output) in self.rule.outputs.iter().enumerate() {
-            vars.insert(format!("{}'", index + 1), output.clone());
+            vars.insert(format!("out{}", index + 1), output.clone());
             out.push(output.clone());
         }
 

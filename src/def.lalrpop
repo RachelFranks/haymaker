@@ -1,5 +1,5 @@
 
-use crate::parsed::{MakeLine, Rule};
+use crate::recipe::Rule;
 use std::path::PathBuf;
 
 grammar();
@@ -19,15 +19,14 @@ Delimit<T, U>: Vec<T> = {
     }
 };
 
-pub Def: Option<MakeLine> = {
+pub Def: Option<Rule> = {
     Rule => Some(<>),
     => None,
 };
 
-Rule: MakeLine = {
+Rule: Rule = {
     <outputs: Ident+> ":" <steps: Delimit<Deps, "|">> => {
-        let rule = Rule { outputs, steps };
-        MakeLine::Rule(rule)
+        Rule { outputs, steps }
     },
 };
 
