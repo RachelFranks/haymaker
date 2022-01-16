@@ -1,3 +1,7 @@
+//
+// Haymaker
+//
+
 use itertools::Itertools;
 
 pub fn uncomment(text: &str, blank: &str) -> Vec<String> {

@@ -1,10 +1,12 @@
 //
-// Copyright 2021, Rachel Franks. All rights reserved
+// Haymaker
 //
 
+use crate::build::BuildGraph;
 use crate::comments::uncomment;
 use crate::console::Color;
 use crate::derive::{add_derivation_highlights, derive, VarMap};
+use crate::gui::Gui;
 use crate::recipe::Recipe;
 use crate::text::Text;
 
@@ -12,6 +14,7 @@ use itertools::Itertools;
 use petgraph::{stable_graph::StableGraph, Direction};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 use lalrpop_util::lalrpop_mod;
@@ -19,9 +22,11 @@ use lalrpop_util::lalrpop_mod;
 use crate::def::DefParser;
 lalrpop_mod!(def);
 
+mod build;
 mod comments;
 mod console;
 mod derive;
+mod gui;
 mod recipe;
 mod regexes;
 mod text;
@@ -31,6 +36,8 @@ mod text;
 struct Opt {
     #[structopt(parse(from_os_str))]
     hayfile: Option<PathBuf>,
+    #[structopt(short = "n", long = "nthreads")]
+    nthreads: Option<usize>,
 }
 
 fn main() {
@@ -186,20 +193,26 @@ fn main() {
         println!();
     }
 
-    let mut graph: StableGraph<Recipe, ()> = StableGraph::new();
+    let mut graph = BuildGraph::new();
     //let mut nodes: BTreeMap::new();
 
     for recipe in recipes {
-        let _node = graph.add_node(recipe);
+        let _node = graph.add_node(Arc::new(recipe));
     }
 
-    while graph.node_count() > 0 {
-        let ready: Vec<_> = graph.externals(Direction::Outgoing).collect();
+    let nthreads = match opt.nthreads {
+        Some(nthreads) => nthreads,
+        None => num_cpus::get(),
+    };
 
-        for node in ready {
-            let recipe = &graph[node];
-            recipe.execute(&vars);
-            graph.remove_node(node);
-        }
-    }
+    let (gui, emit) = Gui::new();
+
+    let _runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .spawn(build::build(emit, graph, nthreads));
+
+    gui.present();
+    println!();
 }

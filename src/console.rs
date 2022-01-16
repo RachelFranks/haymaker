@@ -1,5 +1,5 @@
 //
-// Copyright 2021, Rachel Franks. All rights reserved
+// Haymaker
 //
 
 pub const BLUE: &'static str = "\x1b[34;1m";

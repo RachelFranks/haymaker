@@ -4,16 +4,16 @@ multi = @first second = @third = 32
 
 aaaa:
 bbbb:
-	echo hi
-	echo @multi
+	echo @out hi
+	echo @out @multi
 
 cccc: bbbb
-	echo @1
+	echo @out @1
 
 dddd: aaaa @files
-	echo @2 @1
+	echo @out @2 @1
 
 eeee: aaaa | @files | dddd
-	echo @all
-	echo @out
-	echo @2
+	echo @out @all
+	echo @out @out
+	echo @out @2
