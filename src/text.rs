@@ -1,3 +1,7 @@
+//
+// Haymaker
+//
+
 pub trait Text {
     fn split_when_balanced(&self, on: char, quote: char) -> Vec<&str>;
     fn split_when_balanced_with_offsets(&self, on: char, quote: char) -> Vec<(usize, &str)>;

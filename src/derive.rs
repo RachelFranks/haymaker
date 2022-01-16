@@ -678,9 +678,9 @@ fn test_subcalls() {
         ("a a bb bb a c | shell cat '|' wc -c", "13"),
 
         ("abcd aN32 23 32~e | sift      ^[a-z0-9]+$", "aN32 32~e"),
-        ("abcd aN32 23 32~e | sift   ^[a-z]+ [a-z]$", "23"),
-        ("abcd aN32 23 32~e | filter        [0-9]+$", "aN32 23"),
-        ("abcd aN32 23 32~e | filter            [0-", ""),
+        ("abcd aN32 23 32~e | sift   ^[a-z] [a-z]$", "23"),
+        ("abcd aN32 23 32~e | filter       [0-9]+$", "aN32 23"),
+        ("abcd aN32 23 32~e | filter           [0-", ""),
 
         ("abcd aN32 23 32~e | sift-glob *32*", "abcd 23"),
         
