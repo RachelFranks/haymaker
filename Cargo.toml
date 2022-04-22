@@ -1,8 +1,18 @@
 [package]
 name = "haymaker"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
-authors = ["Rachel Franks"]
+authors = ["Rachel Franks <Rachel 💙#9364>"]
+license = "MIT OR Apache-2.0"
+documentation = "https://github.com/RachelFranks/haymaker"
+homepage = "https://github.com/RachelFranks/haymaker"
+repository = "https://github.com/RachelFranks/haymaker"
+keywords = ["make", "makefile", "build"]
+categories = ["command-line-utilities", "development-tools::build-utils"]
+readme = "README.md"
+description = """
+haymaker is a modern make
+"""
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
