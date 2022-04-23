@@ -1,4 +1,6 @@
 //
+// Haymaker
+//
 
 use crate::console::Color;
 use crate::regexes;
@@ -12,7 +14,7 @@ use std::process::{Command, Stdio};
 
 pub type VarMap = HashMap<String, String>;
 
-pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
+pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> Result<String, String>  {
     //
 
     let mut text = text.to_owned();
@@ -105,7 +107,10 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
                 continue;
             }
 
-            let (replace, printable) = subcall(&inner, vars, debug);
+            let (replace, printable, status) = subcall(&inner, vars, debug);
+            if let Err(message) = status {
+                return Err(message);
+            }
 
             text = match end < text.len() {
                 true => text[0..start].to_owned() + &replace + &text[end..],
@@ -144,10 +149,10 @@ pub fn derive(text: &str, vars: &mut VarMap, debug: bool) -> String {
         panic!("Too many times");
     }
 
-    text.to_string()
+    Ok(text.to_string())
 }
 
-fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
+fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String, Result<(), String>) {
     let mut printable = String::new();
     let mut defs = VarMap::new();
 
@@ -189,7 +194,7 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
             if debug {
                 save!("  {} {}", "error".grey(), message.red());
             }
-            return (String::new(), printable);
+            return (String::new(), printable, Err(message));
         }};
     }
 
@@ -501,8 +506,8 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
 
                 if !output.status.success() {
                     let error = String::from_utf8_lossy(&output.stderr);
-                    save!("  {} {}: {}", "error".grey(), "shell failure".red(), error);
-                    return (String::new(), printable);
+                    save!("  {} {}: {}", "error".grey(), "shell failure".red(), &error);
+                    return (String::new(), printable, Err(error.to_string()));
                 }
 
                 state = String::from_utf8_lossy(&output.stdout).to_string();
@@ -534,14 +539,15 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
             }
             "stop" => {
                 save!("    {} {}", "out".grey(), &state);
-                return (state, printable);
+                return (state, printable, Ok(()));
             }
             "error" => error!("called error"),
             "suppress_errors" => {}
             unknown => {
+                let message = format!("{} is not a valid command", unknown.red());
                 if debug {
-                    save!("  {} {} is not a valid command", "error".grey(), unknown.red());
-                    return (String::from(""), printable);
+                    save!("  {} {}", "error".grey(), message);
+                    return (String::from(""), printable, Err(message));
                 }
             }
         }
@@ -558,7 +564,7 @@ fn subcall(text: &str, vars: &mut VarMap, debug: bool) -> (String, String) {
         printable.pop();
     }
 
-    (state.trim().to_owned(), printable)
+    (state.trim().to_owned(), printable, Ok(()))
 }
 
 pub fn add_derivation_highlights(text: &str) -> String {
@@ -678,9 +684,9 @@ fn test_subcalls() {
         ("a a bb bb a c | shell cat '|' wc -c", "13"),
 
         ("abcd aN32 23 32~e | sift      ^[a-z0-9]+$", "aN32 32~e"),
-        ("abcd aN32 23 32~e | sift   ^[a-z]+ [a-z]$", "23"),
-        ("abcd aN32 23 32~e | filter        [0-9]+$", "aN32 23"),
-        ("abcd aN32 23 32~e | filter            [0-", ""),
+        ("abcd aN32 23 32~e | sift   ^[a-z] [a-z]$", "23"),
+        ("abcd aN32 23 32~e | filter       [0-9]+$", "aN32 23"),
+        ("abcd aN32 23 32~e | filter           [0-", ""),
 
         ("abcd aN32 23 32~e | sift-glob *32*", "abcd 23"),
         
@@ -720,7 +726,7 @@ fn test_derivation() {
     ];
 
     for (case, correct) in cases {
-        let line = derive(&case, &mut vars, true);
+        let line = derive(&case, &mut vars, true).unwrap();
         assert_eq!(&line, &correct);
     }
 }

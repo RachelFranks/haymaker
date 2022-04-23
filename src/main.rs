@@ -1,10 +1,11 @@
 //
-// Copyright 2021, Rachel Franks. All rights reserved
+// Haymaker
 //
 
 use crate::comments::uncomment;
 use crate::console::Color;
 use crate::derive::{add_derivation_highlights, derive, VarMap};
+use crate::line::LineInfo;
 use crate::parsed::MakeLine;
 use crate::recipe::Recipe;
 use crate::text::Text;
@@ -23,6 +24,7 @@ lalrpop_mod!(def);
 mod comments;
 mod console;
 mod derive;
+mod line;
 mod parsed;
 mod recipe;
 mod regexes;
@@ -54,7 +56,6 @@ fn main() {
     };
 
     let filename = hayfile.to_string_lossy();
-
     let haysource = match std::fs::read_to_string(&hayfile) {
         Ok(haysource) => haysource,
         Err(err) => {
@@ -72,19 +73,16 @@ fn main() {
 
         let lineno = index + 1;
         let source = &line;
-        let mut line = line.trim();
 
-        if line == "" {
+        if line.trim() == "" {
             // skip blanks for performance
             continue;
         }
 
-        let debug = line.chars().next() == Some('+');
-        if debug {
-            line = &line[1..];
-        }
+        let info = LineInfo::from(line.as_ref());
+        let line = info.sans_flags.trim();
 
-        if source.starts_with(char::is_whitespace) {
+        if info.shell {
             // shell source can have arbitrary text & starts after the tab
 
             let recipe = match recipes.last_mut() {
@@ -92,16 +90,14 @@ fn main() {
                 None => {
                     let kind = "Structure";
                     let message = "stray shell code outside of a recipe";
-                    let mut column = source.chars().position(|c| !c.is_whitespace()).unwrap();
-                    if debug {
-                        column += 1;
-                    }
-                    console::print_source_error(kind, &message, &filename, &source, lineno, column);
+                    console::print_source_error(
+                        kind, &message, &filename, &source, lineno, info.split,
+                    );
                     std::process::exit(1);
                 }
             };
 
-            recipe.add_command(line.to_string(), debug);
+            recipe.add_command(line.to_string(), info.debug);
             continue;
         }
 
@@ -122,7 +118,31 @@ fn main() {
         }
 
         let raw = line.clone();
-        let line = derive(&line, &mut vars, debug);
+        let line = match derive(&line, &mut vars, info.debug) {
+            Ok(line) => line,
+            Err(message) => {
+                let note = format!("{}: {} {}", "note".white(), "this was", raw.grey());
+                let help = format!(
+                    "{}: place a {} before the line to enable debug mode",
+                    "help".white(),
+                    "+".mint()
+                );
+
+                let more = match info.debug {
+                    true => vec![note],
+                    false => vec![note, help],
+                };
+                let kind = "Subcall";
+                console::print_processed_error(
+                    kind, &message, &filename, &line, more, lineno, 0,
+                );
+                
+                if !info.neglect {
+                    std::process::exit(1);
+                }
+                continue;
+            }
+        };
 
         if line.starts_with("include") {
             //
@@ -138,9 +158,7 @@ fn main() {
                     let message = format!("file {} does not exist", include.red());
 
                     if line == raw {
-                        if debug {
-                            offset += 1;
-                        }
+                        offset += info.split;
                         console::print_source_error(
                             kind, &message, &filename, &source, lineno, offset,
                         );
@@ -152,7 +170,7 @@ fn main() {
                             "+".mint()
                         );
 
-                        let info = match debug {
+                        let info = match info.debug {
                             true => vec![note],
                             false => vec![note, help],
                         };
@@ -162,7 +180,9 @@ fn main() {
                         );
                     }
 
-                    std::process::exit(1);
+                    if !info.neglect {
+                        std::process::exit(1);
+                    }
                 }
             }
             continue;
@@ -174,11 +194,9 @@ fn main() {
             Ok(_) => continue,
         };
 
-        if let MakeLine::Rule(rule) = parsed {
-            let recipe = Recipe::from(rule);
-            recipes.push(recipe);
-            continue;
-        }
+        let MakeLine::Rule(rule) = parsed;
+        let recipe = Recipe::from(rule);
+        recipes.push(recipe);
     }
 
     for (variable, value) in &vars {

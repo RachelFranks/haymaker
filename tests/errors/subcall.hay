@@ -1,0 +1,6 @@
+
+start = hello
+hello = @(start | add world | error)
+
+goal: @hello
+	-echo @hello

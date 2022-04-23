@@ -1,3 +1,7 @@
+//
+// Haymaker
+//
+
 use crate::console::Color;
 use crate::derive::{add_derivation_highlights, derive, VarMap};
 use crate::parsed::Rule;
@@ -79,7 +83,10 @@ impl Recipe {
             let line = &command.line;
             let debug = command.debug;
 
-            let line = derive(&line, &mut vars, debug);
+            let line = match derive(&line, &mut vars, debug) {
+                Ok(line) => line,
+                Err(err) => continue,
+            };
 
             println!("{}", line.grey());
             let command = Command::new("sh").arg("-c").arg(line).output();

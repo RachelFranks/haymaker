@@ -2,6 +2,8 @@
 // Copyright 2021, Rachel Franks. All rights reserved
 //
 
+use crate::text::Text;
+
 pub const BLUE: &'static str = "\x1b[34;1m";
 pub const DIM: &'static str = "\x1b[2m";
 pub const GREY: &'static str = "\x1b[0;0m\x1b[90m";
@@ -50,7 +52,7 @@ pub fn print_source_error(
     filename: &str,
     line: &str,
     num: usize,
-    column: usize,
+    mut column: usize,
 ) {
     let len = num.to_string().len();
     let margin = " ".repeat(len);
@@ -60,7 +62,12 @@ pub fn print_source_error(
     let position = format!("line {} column {}", num.blue(), column.blue());
     let editor = format!("({}:{}:{})", filename, num, column).grey();
 
-    let line = line.replace('\t', " ");
+    let mut line = line.replace('\t', " ");
+    let (after, white) = line.after_whitespace();
+    if column >= white {
+        line = after.to_owned();
+        column -= white;
+    }
 
     println!();
     println!("{}: {}", kind.red(), message);
